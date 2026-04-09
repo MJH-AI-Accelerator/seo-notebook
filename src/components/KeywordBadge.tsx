@@ -1,3 +1,5 @@
+"use client";
+
 import { MJH_BLUE } from "./styles";
 import { PlacementIndicators } from "./PlacementIndicators";
 import type { KeywordPlacement } from "../lib/types";

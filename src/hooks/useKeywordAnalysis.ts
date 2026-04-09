@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect, useCallback, useRef } from "react";
 import { fetchAnalysis, lookupKeywords } from "../lib/api";
 import type { SEOAnalysis, DeepAnalysis, DocumentFields } from "../lib/types";

@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useRef, useEffect } from "react";
 import { useConfig } from "./ConfigContext";
 import { submitFeedback } from "../lib/api";

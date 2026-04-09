@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useConfig } from "./ConfigContext";
 import { PlacementIndicators } from "./PlacementIndicators";
