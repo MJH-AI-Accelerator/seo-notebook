@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useKeywordAnalysis } from "../hooks/useKeywordAnalysis";
 import { useConfig } from "./ConfigContext";

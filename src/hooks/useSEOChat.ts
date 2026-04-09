@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useCallback, useEffect, useRef } from "react";
 import { fetchChatStream, loadChatHistory, saveChatHistory } from "../lib/api";
 import type { ChatMessage } from "../lib/types";

@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useRef } from "react";
 import { MJH_GOLD } from "./styles";
 

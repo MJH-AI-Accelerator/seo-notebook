@@ -1,3 +1,5 @@
+"use client";
+
 import { MJH_GOLD } from "./styles";
 
 export function LoadingBars({ size = "sm", color = MJH_GOLD }: { size?: "xs" | "sm"; color?: string }) {

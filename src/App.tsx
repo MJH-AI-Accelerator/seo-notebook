@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useCallback, useRef, useEffect } from "react";
 import { ConfigProvider } from "./components/ConfigContext";
 import { WordEditor } from "./components/WordEditor";
@@ -5,7 +7,7 @@ import { SEONotebookPanel } from "./components/SEONotebookPanel";
 import { MJH_GOLD } from "./components/styles";
 import type { DocumentFields } from "./lib/types";
 
-const API_URL = import.meta.env.DEV ? "http://localhost:3000" : "https://ecaruso.vercel.app";
+const API_URL = process.env.NODE_ENV === "development" ? "http://localhost:3000" : "https://ecaruso.vercel.app";
 const DOCUMENT_ID = "seo-notebook-local";
 
 const MJH_PUBLICATIONS = [
