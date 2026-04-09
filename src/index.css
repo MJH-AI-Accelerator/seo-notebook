@@ -1,0 +1,206 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* TipTap Editor Styles */
+.word-editor-content {
+  font-family: 'Georgia', 'Times New Roman', serif;
+  font-size: 16px;
+  line-height: 1.75;
+  color: #1a1a1a;
+}
+
+.word-editor-content p {
+  margin-bottom: 12px;
+}
+
+.word-editor-content h1 {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 24px 0 12px;
+  color: #111827;
+}
+
+.word-editor-content h2 {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 20px 0 10px;
+  color: #1f2937;
+}
+
+.word-editor-content h3 {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 16px 0 8px;
+  color: #374151;
+}
+
+.word-editor-content h4 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 12px 0 6px;
+  color: #4b5563;
+}
+
+.word-editor-content ul,
+.word-editor-content ol {
+  padding-left: 24px;
+  margin-bottom: 12px;
+}
+
+.word-editor-content li {
+  margin-bottom: 4px;
+}
+
+.word-editor-content blockquote {
+  border-left: 3px solid #d1d5db;
+  padding-left: 16px;
+  margin: 16px 0;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.word-editor-content hr {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  margin: 24px 0;
+}
+
+.word-editor-content a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.word-editor-content code {
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.word-editor-content pre {
+  background: #1e293b;
+  color: #e2e8f0;
+  padding: 16px;
+  border-radius: 8px;
+  margin: 16px 0;
+  overflow-x: auto;
+}
+
+.word-editor-content pre code {
+  background: none;
+  padding: 0;
+  color: inherit;
+}
+
+.word-editor-content mark {
+  background: #fef08a;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+.word-editor-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  margin: 16px 0;
+}
+
+/* Table Styles */
+.word-editor-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  table-layout: fixed;
+}
+
+.word-editor-content th,
+.word-editor-content td {
+  border: 1px solid #d1d5db;
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+  position: relative;
+}
+
+.word-editor-content th {
+  background: #f9fafb;
+  font-weight: 600;
+}
+
+.word-editor-content .selectedCell {
+  background: #e0e7ff;
+}
+
+.word-editor-content .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: #3b82f6;
+  cursor: col-resize;
+}
+
+.word-editor-content .tableWrapper {
+  overflow-x: auto;
+  margin: 16px 0;
+}
+
+/* Placeholder */
+.word-editor-content p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: #adb5bd;
+  pointer-events: none;
+  height: 0;
+}
+
+/* Selection */
+.word-editor-content ::selection {
+  background: #bfdbfe;
+}
+
+/* Global animations */
+@keyframes content-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* Responsive paper sizing */
+@media (max-width: 768px) {
+  .word-paper {
+    padding: 24px 16px !important;
+    min-height: auto !important;
+    margin: 8px !important;
+    border-radius: 8px !important;
+  }
+}
+
+/* Print styles */
+@media print {
+  body, html, #root {
+    height: auto;
+    overflow: visible;
+  }
+  .word-paper {
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+  }
+}
