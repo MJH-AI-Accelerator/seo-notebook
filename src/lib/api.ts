@@ -1,4 +1,4 @@
-import type { SEOAnalysis, DeepAnalysis, ChatMessage, DocumentFields } from "./types";
+import type { SEOAnalysis, DeepAnalysis, ChatMessage, DocumentFields, ContentSuggestions, InternalLink, LinkingSuggestion } from "./types";
 
 function safeParseJson<T>(text: string): T {
   try {
@@ -53,7 +53,6 @@ export async function fetchChatStream(
     missingKeywords?: { term: string; volume: number | null }[];
     aeoData?: {
       questionHeadings: { suggestedHeading: string; rationale: string }[];
-      faqSuggestions: { question: string; answer: string }[];
     };
   }
 ): Promise<ReadableStream<Uint8Array> | null> {
@@ -118,22 +117,6 @@ export async function fetchQuestions(
   return response.json();
 }
 
-export async function fetchMoreFAQs(
-  apiUrl: string,
-  content: string,
-  existingQuestions: string[],
-  publication?: string
-): Promise<{ question: string; answer: string }[]> {
-  const res = await fetch(`${apiUrl}/api/seo-copilot/more-faqs`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content, existingQuestions, publication }),
-  });
-  if (!res.ok) return [];
-  const data = await res.json();
-  return data.faqSuggestions || [];
-}
-
 export async function loadChatHistory(
   apiUrl: string,
   userId: string,
@@ -146,6 +129,100 @@ export async function loadChatHistory(
     if (!res.ok) return [];
     const data = await res.json();
     return (data.messages as ChatMessage[]) || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchContentSuggestions(
+  apiUrl: string,
+  content: string,
+  primaryKeyword: string,
+  publication?: string
+): Promise<ContentSuggestions> {
+  const empty: ContentSuggestions = { keyTakeaways: [], infographicOpportunities: [], bulletListItems: [] };
+  try {
+    const res = await fetch(`${apiUrl}/api/seo-copilot/content-suggestions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content, primaryKeyword, publication }),
+    });
+    if (!res.ok) return empty;
+    const data = await res.json().catch(() => null);
+    if (!data || typeof data !== "object") return empty;
+    return {
+      keyTakeaways: Array.isArray(data.keyTakeaways) ? data.keyTakeaways : [],
+      infographicOpportunities: Array.isArray(data.infographicOpportunities) ? data.infographicOpportunities : [],
+      bulletListItems: Array.isArray(data.bulletListItems) ? data.bulletListItems : [],
+    };
+  } catch {
+    return empty;
+  }
+}
+
+export async function fetchInternalLinks(
+  apiUrl: string,
+  keywords: string[],
+  currentDocumentId?: string,
+  publication?: string
+): Promise<InternalLink[]> {
+  if (!keywords || keywords.length === 0) return [];
+  try {
+    const res = await fetch(`${apiUrl}/api/seo-copilot/articles`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "related", keywords, publication }),
+    });
+    if (!res.ok) return [];
+    const data = await res.json().catch(() => null);
+    if (!data || typeof data !== "object") return [];
+    type ArticleResult = { _id?: string; title?: string; slug?: string; publishedAt?: string };
+    const articles: ArticleResult[] = Array.isArray(data.articles) ? data.articles : [];
+    const filtered = currentDocumentId
+      ? articles.filter((a) => a._id !== currentDocumentId)
+      : articles;
+    return filtered.map((a): InternalLink => ({
+      _id: a._id,
+      title: a.title || "Untitled",
+      slug: a.slug || "",
+      publishedAt: a.publishedAt,
+      relevanceReason: matchedKeyword(a.title, keywords),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function matchedKeyword(title: string | undefined, keywords: string[]): string {
+  const lower = (title || "").toLowerCase();
+  if (!lower) return "Related to current topic";
+  for (const kw of keywords) {
+    if (kw && lower.includes(kw.toLowerCase())) {
+      return `Matches "${kw}"`;
+    }
+  }
+  return "Related to current topic";
+}
+
+export async function fetchLinkingSuggestions(
+  apiUrl: string,
+  content: string,
+  primaryKeyword: string,
+  supportingKeywords: string[],
+  currentDocumentId?: string,
+  publication?: string
+): Promise<LinkingSuggestion[]> {
+  if (!content || content.trim().length < 50) return [];
+  try {
+    const res = await fetch(`${apiUrl}/api/seo-copilot/linking-suggestions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content, primaryKeyword, supportingKeywords, currentDocumentId, publication }),
+    });
+    if (!res.ok) return [];
+    const data = await res.json().catch(() => null);
+    if (!data || !Array.isArray(data.suggestions)) return [];
+    return data.suggestions as LinkingSuggestion[];
   } catch {
     return [];
   }

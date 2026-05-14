@@ -14,7 +14,6 @@ interface KeywordPanelData {
   missingKeywords?: { term: string; volume: number | null }[];
   aeoData?: {
     questionHeadings: { suggestedHeading: string; rationale: string }[];
-    faqSuggestions: { question: string; answer: string }[];
   };
 }
 

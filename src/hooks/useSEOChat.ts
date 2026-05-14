@@ -10,7 +10,6 @@ interface KeywordPanelData {
   missingKeywords?: { term: string; volume: number | null }[];
   aeoData?: {
     questionHeadings: { suggestedHeading: string; rationale: string }[];
-    faqSuggestions: { question: string; answer: string }[];
   };
 }
 
@@ -59,12 +58,15 @@ export function useSEOChat(
     if (!documentId || historyLoaded) return;
     let cancelled = false;
     loadChatHistory(apiUrl, userId.current, documentId).then((loaded) => {
-      if (!cancelled && loaded.length > 0 && messages.length === 0) {
-        setMessages(loaded);
+      if (cancelled) return;
+      if (loaded.length > 0) {
+        // Functional update so user-typed messages during load aren't clobbered
+        setMessages((current) => (current.length === 0 ? loaded : current));
       }
-      if (!cancelled) setHistoryLoaded(true);
+      setHistoryLoaded(true);
     });
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiUrl, documentId, historyLoaded]);
 
   const scheduleSave = useCallback((msgs: ChatMessage[]) => {

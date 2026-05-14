@@ -7,8 +7,14 @@ import { KeywordPanel } from "./KeywordPanel";
 import { ChatPanel } from "./ChatPanel";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { LoadingBars } from "./LoadingBars";
-import { INJECTED_CSS, MJH_GOLD, MJH_SLATE } from "./styles";
-import type { DocumentFields } from "../lib/types";
+import { TabBar } from "./TabBar";
+import { SummaryTab } from "./tabs/SummaryTab";
+import { AEOTab } from "./tabs/AEOTab";
+import { LinkingTab } from "./tabs/LinkingTab";
+import { MetaTab } from "./tabs/MetaTab";
+import { INJECTED_CSS, MJH_GOLD, MJH_SLATE, PANEL_BG } from "./styles";
+import { fetchLinkingSuggestions, fetchContentSuggestions } from "../lib/api";
+import type { DocumentFields, TabId, LinkingSuggestion, SummaryItem, ContentSuggestions } from "../lib/types";
 
 interface SEONotebookPanelProps {
   text: string;
@@ -32,18 +38,215 @@ export function SEONotebookPanel({ text, documentFields, documentId }: SEONotebo
   // Lifted state
   const seedCacheKey = `seo-notebook-cache-${documentId}`;
   const [seedKeywords, setSeedKeywordsRaw] = useState<string[]>(() => {
-    try { const c = localStorage.getItem(seedCacheKey); if (c) return JSON.parse(c).seeds || []; } catch {} return [];
+    try {
+      const c = localStorage.getItem(seedCacheKey);
+      if (c) return JSON.parse(c).seeds || [];
+    } catch {}
+    return [];
   });
-  const setSeedKeywords = useCallback((seeds: string[]) => {
-    setSeedKeywordsRaw(seeds);
-    try { const c = JSON.parse(localStorage.getItem(seedCacheKey) || "{}"); localStorage.setItem(seedCacheKey, JSON.stringify({ ...c, seeds })); } catch {}
-  }, [seedCacheKey]);
+  const setSeedKeywords = useCallback(
+    (seeds: string[]) => {
+      setSeedKeywordsRaw(seeds);
+      try {
+        const c = JSON.parse(localStorage.getItem(seedCacheKey) || "{}");
+        localStorage.setItem(seedCacheKey, JSON.stringify({ ...c, seeds }));
+      } catch {}
+    },
+    [seedCacheKey]
+  );
   const [selectedPrimary, setSelectedPrimary] = useState<string | undefined>();
   const keywordAnalysisState = useKeywordAnalysis(text, apiUrl, publication, seedKeywords, documentFields, selectedPrimary, documentId);
 
-  const [keywordsOpen, setKeywordsOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState<TabId>(() => {
+    // One-shot migration for renamed tabs (2026-05): "technical" -> "meta", "seo" -> "summary".
+    try {
+      const stored = typeof window !== "undefined" ? localStorage.getItem("seo-notebook-active-tab") : null;
+      if (stored === "technical") return "meta";
+      if (stored === "seo") return "summary";
+      const validTabs: TabId[] = ["summary", "keywords", "aeo", "linking", "meta"];
+      if (stored && validTabs.includes(stored as TabId)) return stored as TabId;
+    } catch {}
+    return "keywords";
+  });
   const [chatOpen, setChatOpen] = useState(true);
   const isLoading = keywordAnalysisState.isLoading;
+
+  const effectivePrimary = selectedPrimary || keywordAnalysisState.analysis?.primaryKeyword?.term || "";
+
+  // Smart Linking - lifted state, persisted per-doc.
+  const linkingKey = `seo-notebook-linking-${documentId}`;
+  const [linkingSuggestions, setLinkingSuggestions] = useState<LinkingSuggestion[]>(() => {
+    try {
+      const cached = typeof window !== "undefined" ? localStorage.getItem(linkingKey) : null;
+      return cached ? JSON.parse(cached) : [];
+    } catch { return []; }
+  });
+  const [isLinkingLoading, setIsLinkingLoading] = useState(false);
+  const [linkingError, setLinkingError] = useState<string | null>(null);
+  // The article text at the moment we last fetched - used to flag stale suggestions.
+  const [linkingFetchedText, setLinkingFetchedText] = useState("");
+  const linkingVersionRef = useRef(0);
+  // Tracks the keyword signature we last fetched for. Declared here (not next to the
+  // auto-fetch effect) so the doc-change reset below can clear it - otherwise switching
+  // to a doc with cached suggestions triggers a wasted re-fetch.
+  const lastLinkingFetchKey = useRef<string>("");
+
+  const persistLinkingSuggestions = useCallback((sugs: LinkingSuggestion[]) => {
+    setLinkingSuggestions(sugs);
+    try { localStorage.setItem(linkingKey, JSON.stringify(sugs)); } catch {}
+  }, [linkingKey]);
+
+  // Reset linking state on document change
+  const lastDocIdRef = useRef(documentId);
+  useEffect(() => {
+    if (lastDocIdRef.current !== documentId) {
+      lastDocIdRef.current = documentId;
+      linkingVersionRef.current += 1;
+      setIsLinkingLoading(false);
+      setLinkingError(null);
+      lastLinkingFetchKey.current = "";
+      try {
+        const cached = localStorage.getItem(`seo-notebook-linking-${documentId}`);
+        setLinkingSuggestions(cached ? JSON.parse(cached) : []);
+      } catch { setLinkingSuggestions([]); }
+    }
+  }, [documentId]);
+
+  const supportingKeywordsForLinking = useMemo(() => {
+    return (keywordAnalysisState.analysis?.supportingKeywords || [])
+      .map((kw) => kw.term)
+      .filter(Boolean)
+      .slice(0, 5);
+  }, [keywordAnalysisState.analysis]);
+
+  const refreshLinkingSuggestions = useCallback(async () => {
+    if (!text || text.trim().length < 50) return;
+    if (!effectivePrimary) return;
+    const myVersion = linkingVersionRef.current;
+    setIsLinkingLoading(true);
+    setLinkingError(null);
+    try {
+      const suggestions = await fetchLinkingSuggestions(
+        apiUrl,
+        text,
+        effectivePrimary,
+        supportingKeywordsForLinking,
+        documentId,
+        publication
+      );
+      if (linkingVersionRef.current !== myVersion) return;
+      persistLinkingSuggestions(suggestions);
+      setLinkingFetchedText(text);
+    } catch {
+      if (linkingVersionRef.current !== myVersion) return;
+      setLinkingError("Could not fetch linking suggestions. Try again.");
+    }
+    if (linkingVersionRef.current !== myVersion) return;
+    setIsLinkingLoading(false);
+  }, [apiUrl, text, effectivePrimary, supportingKeywordsForLinking, documentId, publication, persistLinkingSuggestions]);
+
+  // Stale = the article changed materially since we last fetched suggestions.
+  const isLinkingStale = useMemo(() => {
+    if (!linkingFetchedText || linkingSuggestions.length === 0) return false;
+    if (Math.abs(text.length - linkingFetchedText.length) > 150) return true;
+    return text.slice(0, 300) !== linkingFetchedText.slice(0, 300);
+  }, [text, linkingFetchedText, linkingSuggestions.length]);
+
+  useEffect(() => {
+    if (!text || text.trim().length < 50 || !effectivePrimary) return;
+    const fetchKey = `${documentId}|${effectivePrimary}|${supportingKeywordsForLinking.join(",")}`;
+    if (fetchKey === lastLinkingFetchKey.current) return;
+    if (linkingSuggestions.length > 0 && lastLinkingFetchKey.current === "") {
+      lastLinkingFetchKey.current = fetchKey;
+      return;
+    }
+    lastLinkingFetchKey.current = fetchKey;
+    refreshLinkingSuggestions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectivePrimary, supportingKeywordsForLinking.join("|"), documentId]);
+
+  // Content suggestions - lifted here so Generate All can trigger them
+  const csKey = `seo-notebook-cs-${documentId}`;
+  const [contentSuggestions, setContentSuggestions] = useState<ContentSuggestions | null>(() => {
+    try {
+      const cached = typeof window !== "undefined" ? localStorage.getItem(csKey) : null;
+      return cached ? JSON.parse(cached) : null;
+    } catch { return null; }
+  });
+  const [isCSLoading, setIsCSLoading] = useState(false);
+  const [csError, setCsError] = useState<string | null>(null);
+  const csVersionRef = useRef(0);
+
+  useEffect(() => {
+    csVersionRef.current += 1;
+    setIsCSLoading(false);
+    setCsError(null);
+    try {
+      const cached = localStorage.getItem(`seo-notebook-cs-${documentId}`);
+      setContentSuggestions(cached ? JSON.parse(cached) : null);
+    } catch { setContentSuggestions(null); }
+  }, [documentId]);
+
+  const loadContentSuggestions = useCallback(async () => {
+    if (!text || text.trim().length < 100) return;
+    const myVersion = csVersionRef.current;
+    setIsCSLoading(true);
+    setCsError(null);
+    try {
+      const data = await fetchContentSuggestions(apiUrl, text, effectivePrimary, publication);
+      if (csVersionRef.current !== myVersion) return;
+      if (
+        data.keyTakeaways.length === 0 &&
+        data.infographicOpportunities.length === 0 &&
+        data.bulletListItems.length === 0
+      ) {
+        setCsError("No suggestions returned. Try again with more content.");
+      } else {
+        setContentSuggestions(data);
+        try { localStorage.setItem(csKey, JSON.stringify(data)); } catch {}
+      }
+    } catch {
+      if (csVersionRef.current !== myVersion) return;
+      setCsError("Could not generate content suggestions. Try again.");
+    }
+    if (csVersionRef.current !== myVersion) return;
+    setIsCSLoading(false);
+  }, [apiUrl, text, effectivePrimary, publication, csKey]);
+
+  // Generate All orchestrator
+  const isAnyLoading =
+    keywordAnalysisState.isLoading ||
+    keywordAnalysisState.isVolumesLoading ||
+    keywordAnalysisState.isDeepLoading ||
+    isCSLoading ||
+    isLinkingLoading;
+
+  const onGenerateAll = useCallback(() => {
+    keywordAnalysisState.runDeepAnalysis();
+    if (text && text.trim().length >= 100) loadContentSuggestions();
+    if (text && text.trim().length >= 50 && effectivePrimary) refreshLinkingSuggestions();
+  }, [keywordAnalysisState, text, effectivePrimary, loadContentSuggestions, refreshLinkingSuggestions]);
+
+  const onSummaryItemClick = useCallback((item: SummaryItem) => {
+    setActiveTab(item.jumpTo.tab);
+    try { localStorage.setItem("seo-notebook-active-tab", item.jumpTo.tab); } catch {}
+    const id = item.jumpTo.anchorId;
+    if (!id) return;
+    // Give React a beat to swap the destination tab from display:none to block,
+    // then scroll + flash the target card so the editor sees where they landed.
+    setTimeout(() => {
+      const el = typeof document !== "undefined" ? document.getElementById(id) : null;
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      el.classList.add("seo-copilot-flash");
+      setTimeout(() => el.classList.remove("seo-copilot-flash"), 1400);
+    }, 80);
+  }, []);
+
+  // Persist activeTab whenever it changes (Notebook doesn't use usePersistentState helper)
+  useEffect(() => {
+    try { localStorage.setItem("seo-notebook-active-tab", activeTab); } catch {}
+  }, [activeTab]);
 
   const keywordPanelData = useMemo(() => {
     const { analysis } = keywordAnalysisState;
@@ -52,14 +255,14 @@ export function SEONotebookPanel({ text, documentFields, documentId }: SEONotebo
       primaryKeyword: { term: analysis.primaryKeyword.term, volume: analysis.primaryKeyword.volume },
       supportingKeywords: (analysis.supportingKeywords || []).map((kw) => ({ term: kw.term, volume: kw.volume })),
       missingKeywords: analysis.missingKeywords.map((kw) => ({ term: kw.term, volume: kw.volume })),
-      aeoData: keywordAnalysisState.deepAnalysis?.aeo ? {
-        questionHeadings: (keywordAnalysisState.deepAnalysis.aeo.questionHeadings || []).map((h) => ({
-          suggestedHeading: h.suggestedHeading, rationale: h.rationale,
-        })),
-        faqSuggestions: (keywordAnalysisState.deepAnalysis.aeo.faqSuggestions || []).map((f) => ({
-          question: f.question, answer: f.answer,
-        })),
-      } : undefined,
+      aeoData: keywordAnalysisState.deepAnalysis?.aeo
+        ? {
+            questionHeadings: (keywordAnalysisState.deepAnalysis.aeo.questionHeadings || []).map((h) => ({
+              suggestedHeading: h.suggestedHeading,
+              rationale: h.rationale,
+            })),
+          }
+        : undefined,
     };
   }, [keywordAnalysisState.analysis, keywordAnalysisState.deepAnalysis]);
 
@@ -94,7 +297,6 @@ export function SEONotebookPanel({ text, documentFields, documentId }: SEONotebo
     };
   }, []);
 
-  // Touch support for mobile divider dragging
   const onTouchStart = useCallback(() => {
     dragging.current = true;
   }, []);
@@ -117,17 +319,42 @@ export function SEONotebookPanel({ text, documentFields, documentId }: SEONotebo
     };
   }, []);
 
+  const tabDefs = [
+    { id: "summary" as TabId, label: "Summary", isHub: true, loading: isAnyLoading },
+    { id: "keywords" as TabId, label: "Keywords", loading: keywordAnalysisState.isLoading || keywordAnalysisState.isVolumesLoading },
+    { id: "aeo" as TabId, label: "AEO/GEO", loading: keywordAnalysisState.isDeepLoading },
+    { id: "linking" as TabId, label: "Linking", loading: isLinkingLoading },
+    { id: "meta" as TabId, label: "Meta" },
+  ];
+
   return (
-    <div className="seo-copilot-panel" style={{ height: "100%", display: "flex", flexDirection: "column", background: "#FBFAF7", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
+    <div
+      className="seo-copilot-panel"
+      style={{
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        // backgroundColor (longhand) so the sheen background-image in INJECTED_CSS isn't reset
+        backgroundColor: PANEL_BG,
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
+      }}
+    >
       <style dangerouslySetInnerHTML={{ __html: INJECTED_CSS }} />
 
       {/* Header */}
-      <div style={{
-        position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "12px 16px",
-        background: "linear-gradient(180deg, #FFFFFF 0%, #FBFAF7 100%)",
-        boxShadow: "0 1px 0 rgba(0,0,0,0.04)", zIndex: 10, flexShrink: 0,
-      }}>
+      <div
+        style={{
+          position: "relative",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "12px 16px",
+          background: `linear-gradient(180deg, #FFFFFF 0%, ${PANEL_BG} 100%)`,
+          boxShadow: "0 1px 0 rgba(0,0,0,0.04)",
+          zIndex: 10,
+          flexShrink: 0,
+        }}
+      >
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <LogoIcon />
           <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: "-0.01em" }}>
@@ -140,37 +367,42 @@ export function SEONotebookPanel({ text, documentFields, documentId }: SEONotebo
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: MJH_GOLD, animation: "content-pulse 2s ease-in-out infinite" }} />
           )}
         </div>
-        <div style={{
-          position: "absolute", bottom: 2, left: 38,
-          fontSize: 9, color: "#b0b8c4", fontWeight: 400, fontStyle: "italic", letterSpacing: "0.02em",
-        }}>
+        <div
+          style={{
+            position: "absolute",
+            bottom: 2,
+            left: 38,
+            fontSize: 9,
+            color: "rgba(0,0,0,0.42)",
+            fontWeight: 400,
+            fontStyle: "italic",
+            letterSpacing: "0.02em",
+          }}
+        >
           More eyes on your expertise
         </div>
       </div>
 
-      {/* Split View */}
+      {/* Tab Bar */}
+      <TabBar tabs={tabDefs} activeTab={activeTab} onTabChange={setActiveTab} />
+
+      {/* Tab content + chat split */}
       <div ref={containerRef} style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        {/* Keywords Section */}
-        <div style={{ height: keywordsOpen ? (chatOpen ? `${splitPercent}%` : "100%") : "auto", overflow: keywordsOpen ? "auto" : "hidden", flexShrink: keywordsOpen ? undefined : 0 }}>
-          <button
-            onClick={() => setKeywordsOpen(!keywordsOpen)}
-            style={{ width: "100%", padding: "6px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "transparent", border: "none", borderBottom: "1px solid rgba(0,0,0,0.06)", cursor: "pointer" }}
-          >
-            <span style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}>
-              <span style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "#9ca3af" }}>Keywords & AEO Insights</span>
-              {(keywordAnalysisState.isLoading || keywordAnalysisState.isVolumesLoading || keywordAnalysisState.isDeepLoading) && (
-                <LoadingBars size="xs" color="#9ca3af" />
-              )}
-            </span>
-            <svg width="12" height="12" viewBox="0 0 20 20" fill="#9ca3af" style={{ transform: keywordsOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 200ms" }}>
-              <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-            </svg>
-          </button>
-          <div style={{ display: keywordsOpen ? "block" : "none" }}>
-            <ErrorBoundary fallbackMessage="Keyword panel encountered an error">
+        <div style={{
+          height: chatOpen ? `${splitPercent}%` : undefined,
+          flex: chatOpen ? undefined : 1,
+          overflow: "auto",
+          minHeight: 0,
+        }}>
+          <ErrorBoundary fallbackMessage="Tab encountered an error">
+            <div style={{ display: activeTab === "keywords" ? "block" : "none" }}>
               <KeywordPanel
-                text={text} publication={publication} seedKeywords={seedKeywords}
-                onSeedsChange={setSeedKeywords} onSelectPrimary={setSelectedPrimary} documentFields={documentFields}
+                text={text}
+                publication={publication}
+                seedKeywords={seedKeywords}
+                onSeedsChange={setSeedKeywords}
+                onSelectPrimary={setSelectedPrimary}
+                documentFields={documentFields}
                 externalAnalysis={{
                   analysis: keywordAnalysisState.analysis,
                   isLoading: keywordAnalysisState.isLoading,
@@ -183,41 +415,120 @@ export function SEONotebookPanel({ text, documentFields, documentId }: SEONotebo
                   aeoContentChanged: keywordAnalysisState.aeoContentChanged,
                 }}
               />
-            </ErrorBoundary>
-          </div>
+            </div>
+            <div style={{ display: activeTab === "summary" ? "block" : "none" }}>
+              <SummaryTab
+                text={text}
+                analysis={keywordAnalysisState.analysis}
+                deepAnalysis={keywordAnalysisState.deepAnalysis}
+                documentFields={documentFields}
+                linkingSuggestions={linkingSuggestions}
+                isAnyLoading={isAnyLoading}
+                onGenerateAll={onGenerateAll}
+                onItemClick={onSummaryItemClick}
+              />
+            </div>
+            <div style={{ display: activeTab === "aeo" ? "block" : "none" }}>
+              <AEOTab
+                text={text}
+                deepAnalysis={keywordAnalysisState.deepAnalysis}
+                isDeepLoading={keywordAnalysisState.isDeepLoading}
+                primaryKeyword={effectivePrimary}
+                publication={publication}
+                runDeepAnalysis={keywordAnalysisState.runDeepAnalysis}
+                aeoContentChanged={keywordAnalysisState.aeoContentChanged}
+                documentId={documentId}
+                contentSuggestions={contentSuggestions}
+                isCSLoading={isCSLoading}
+                csError={csError}
+                loadContentSuggestions={loadContentSuggestions}
+              />
+            </div>
+            <div style={{ display: activeTab === "linking" ? "block" : "none" }}>
+              <LinkingTab
+                analysis={keywordAnalysisState.analysis}
+                suggestions={linkingSuggestions}
+                isLoading={isLinkingLoading}
+                error={linkingError}
+                isStale={isLinkingStale}
+                onRefresh={refreshLinkingSuggestions}
+                documentId={documentId}
+                publication={publication}
+                text={text}
+              />
+            </div>
+            <div style={{ display: activeTab === "meta" ? "block" : "none" }}>
+              <MetaTab text={text} documentFields={documentFields} primaryKeyword={effectivePrimary} />
+            </div>
+          </ErrorBoundary>
         </div>
 
         {/* Draggable Divider */}
-        {keywordsOpen && chatOpen && (
+        {chatOpen && (
           <div
             onMouseDown={onMouseDown}
             onTouchStart={onTouchStart}
             style={{
-              height: 6, cursor: "row-resize",
+              height: 6,
+              cursor: "row-resize",
               background: "linear-gradient(180deg, rgba(0,0,0,0.04) 0%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.04) 100%)",
-              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
             }}
           >
             <div style={{ width: 32, height: 2, borderRadius: 1, background: "#d1d5db" }} />
           </div>
         )}
 
-        {/* Chat Section */}
-        <div style={{
-          flex: chatOpen && !keywordsOpen ? 1 : undefined,
-          height: chatOpen ? (keywordsOpen ? `${100 - splitPercent}%` : undefined) : "auto",
-          overflow: "hidden", display: "flex", flexDirection: "column", flexShrink: chatOpen ? undefined : 0, minHeight: 0,
-        }}>
+        {/* Persistent Chat */}
+        <div
+          style={{
+            height: chatOpen ? `${100 - splitPercent}%` : "auto",
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+            flexShrink: chatOpen ? undefined : 0,
+            minHeight: 0,
+          }}
+        >
           <button
             onClick={() => setChatOpen(!chatOpen)}
-            style={{ width: "100%", padding: "6px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "transparent", border: "none", borderBottom: "1px solid rgba(0,0,0,0.06)", cursor: "pointer" }}
+            style={{
+              width: "100%",
+              padding: "6px 12px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              background: "transparent",
+              border: "none",
+              borderTop: "1px solid rgba(0,0,0,0.14)",
+              borderBottom: chatOpen ? "1px solid rgba(0,0,0,0.14)" : "none",
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
           >
-            <span style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "#9ca3af" }}>Chat</span>
-            <svg width="12" height="12" viewBox="0 0 20 20" fill="#9ca3af" style={{ transform: chatOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 200ms" }}>
-              <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+            <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "rgba(0,0,0,0.55)" }}>
+              Chat
+            </span>
+            <svg width="12" height="12" viewBox="0 0 20 20" fill="rgba(0,0,0,0.55)" style={{ transform: chatOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 200ms" }}>
+              <path
+                fillRule="evenodd"
+                d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+                clipRule="evenodd"
+              />
             </svg>
           </button>
-          <div style={{ flex: chatOpen ? 1 : 0, overflow: "hidden", display: chatOpen ? "flex" : "none", flexDirection: "column", minHeight: 0 }}>
+          <div
+            style={{
+              flex: chatOpen ? 1 : 0,
+              overflow: "hidden",
+              display: chatOpen ? "flex" : "none",
+              flexDirection: "column",
+              minHeight: 0,
+            }}
+          >
             <ErrorBoundary fallbackMessage="Chat encountered an error">
               <ChatPanel text={text} publication={publication} keywordPanelData={keywordPanelData} documentId={documentId} />
             </ErrorBoundary>
