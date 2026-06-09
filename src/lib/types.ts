@@ -55,23 +55,8 @@ export interface AEORecommendations {
     suggestedHeading: string;
     rationale: string;
   }[];
-  faqSuggestions: {
-    question: string;
-    answer: string;
-    volume?: number | null;
-  }[];
-  faqItems?: {
-    question: string;
-    answer: string;
-    volume: number | null;
-    highlightedKeywords?: { term: string; volume: number }[];
-  }[];
-  highVolumeQuestions?: {
-    question: string;
-    answer: string;
-    volume: number | null;
-    highlightedKeywords?: { term: string; volume: number }[];
-  }[];
+  // Legacy field for backward compat with persisted client state. FAQ output removed
+  // 2026-05 after Google sunset FAQ rich results.
   headingSuggestions?: {
     heading: string;
     answer: string;
@@ -96,12 +81,97 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface HeadingItem {
+  text: string;
+  level: number; // 1-6
+}
+
 export interface DocumentFields {
   title?: string;
   metaDescription?: string;
   slug?: string;
   imageNames?: string[];
+  // Title attributes found on images (hover tooltip). imageCount is the total
+  // number of images, so the title audit can report "X of N images have a title".
+  imageTitles?: string[];
+  imageCount?: number;
   headings?: string[];
+  headingsDetailed?: HeadingItem[];
+  bodyLinks?: string[];
   contentCategory?: string;
   contentPlacement?: string[];
+}
+
+// V3 - Tabbed UI additions
+
+export interface ContentSuggestions {
+  keyTakeaways: string[];
+  infographicOpportunities: { concept: string; description: string }[];
+  bulletListItems: string[];
+}
+
+export interface InternalLink {
+  _id?: string;
+  title: string;
+  slug: string;
+  publishedAt?: string;
+  relevanceReason: string;
+}
+
+// V3.5 - Smart Linking
+export interface LinkingSuggestion {
+  _id: string;
+  title: string;
+  slug: string;
+  publishedAt: string;
+  compositeScore: number;
+  topicScore: number;
+  freshnessScore: number;
+  sectionFitScore: number;
+  anchorParagraph: number;
+  anchorQuote: string;
+  anchorReason: string;
+  relevanceReason: string;
+  freshnessLabel: "fresh" | "recent" | "older" | "very-old";
+}
+
+export interface TechnicalAuditItem {
+  label: string;
+  value: string;
+  status: "good" | "warning" | "error";
+  recommendation?: string;
+}
+
+export type TabId = "summary" | "keywords" | "aeo" | "linking" | "meta" | "technical";
+
+export type SummaryCategory =
+  | "meta"
+  | "headings"
+  | "content"
+  | "images"
+  | "keywords"
+  | "aeo"
+  | "geo"
+  | "internal-linking"
+  | "technical";
+
+export interface LinkCheckResult {
+  url: string;
+  status: number;
+  finalUrl?: string;
+  redirected: boolean;
+  category: "ok" | "redirect" | "broken" | "unverified" | "error";
+  error?: string;
+}
+
+export type SummarySeverity = "error" | "warning" | "opportunity";
+
+export interface SummaryItem {
+  id: string;
+  category: SummaryCategory;
+  severity: SummarySeverity;
+  label: string;
+  description: string;
+  howToFix: string;
+  jumpTo: { tab: TabId; anchorId?: string };
 }

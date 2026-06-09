@@ -432,6 +432,7 @@ export function WordEditor({ onContentChange }: WordEditorProps) {
   });
 
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3, 4] },
@@ -482,13 +483,31 @@ export function WordEditor({ onContentChange }: WordEditorProps) {
   const scheduleUpdate = useCallback((plainText: string, html: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      const headingMatches = html.match(/<h[1-4][^>]*>(.*?)<\/h[1-4]>/gi) || [];
-      const headings = headingMatches.map(h => h.replace(/<[^>]+>/g, ""));
-      const imgMatches = html.match(/<img[^>]+alt="([^"]*)"[^>]*>/gi) || [];
-      const imageNames = imgMatches.map(img => {
-        const match = img.match(/alt="([^"]*)"/);
-        return match ? match[1] : "";
-      }).filter(Boolean);
+      // Headings with their level - used by Technical tab for hierarchy audits.
+      const headingsDetailed: { text: string; level: number }[] = [];
+      const headingTagRegex = /<h([1-6])[^>]*>(.*?)<\/h\1>/gi;
+      let hm: RegExpExecArray | null;
+      while ((hm = headingTagRegex.exec(html)) !== null) {
+        headingsDetailed.push({ level: Number(hm[1]), text: hm[2].replace(/<[^>]+>/g, "").trim() });
+      }
+      const headings = headingsDetailed.map((h) => h.text).filter(Boolean);
+
+      // Scan every <img> so we get a true image count (for the title audit), plus
+      // alt text (names) and the title attribute (the hover tooltip).
+      const allImgs = html.match(/<img[^>]*>/gi) || [];
+      const imageCount = allImgs.length;
+      const imageNames = allImgs
+        .map((img) => { const m = img.match(/alt="([^"]*)"/); return m ? m[1] : ""; })
+        .filter(Boolean);
+      const imageTitles = allImgs
+        .map((img) => { const m = img.match(/title="([^"]*)"/); return m ? m[1] : ""; })
+        .filter(Boolean);
+
+      // External link URLs in the body, used by the Technical tab's broken-link check.
+      const linkRegex = /<a[^>]+href="(https?:\/\/[^"]+)"/gi;
+      const bodyLinks = new Set<string>();
+      let lm: RegExpExecArray | null;
+      while ((lm = linkRegex.exec(html)) !== null) bodyLinks.add(lm[1]);
 
       const fullText = [title, plainText].filter(Boolean).join("\n\n");
 
@@ -497,7 +516,11 @@ export function WordEditor({ onContentChange }: WordEditorProps) {
         metaDescription: metaDescription || undefined,
         slug: slug || undefined,
         headings: headings.length > 0 ? headings : undefined,
+        headingsDetailed: headingsDetailed.length > 0 ? headingsDetailed : undefined,
         imageNames: imageNames.length > 0 ? imageNames : undefined,
+        imageTitles: imageTitles.length > 0 ? imageTitles : undefined,
+        imageCount: imageCount > 0 ? imageCount : undefined,
+        bodyLinks: bodyLinks.size > 0 ? Array.from(bodyLinks) : undefined,
       });
     }, 2000);
   }, [title, metaDescription, slug, onContentChange]);
@@ -508,7 +531,7 @@ export function WordEditor({ onContentChange }: WordEditorProps) {
       scheduleUpdate(editor.getText(), editor.getHTML());
       scheduleAutoSave(editor.getHTML());
     }
-  }, [title, metaDescription, slug]);
+  }, [title, metaDescription, slug, scheduleUpdate, scheduleAutoSave]);
 
   // Apply font size
   useEffect(() => {

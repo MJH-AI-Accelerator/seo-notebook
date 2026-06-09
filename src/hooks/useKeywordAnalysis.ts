@@ -144,7 +144,8 @@ export function useKeywordAnalysis(
     return () => {
       cancelled = true;
     };
-  }, [text, apiUrl, publication, effectiveSeeds?.join(","), focusPrimary]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text, apiUrl, publication, effectiveSeeds?.join(","), focusPrimary, JSON.stringify(documentFields)]);
 
   const doVolumeLookup = useCallback((analysisResult: SEOAnalysis, terms?: string[]) => {
     setIsVolumesLoading(true);

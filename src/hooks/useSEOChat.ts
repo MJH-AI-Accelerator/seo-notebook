@@ -10,7 +10,6 @@ interface KeywordPanelData {
   missingKeywords?: { term: string; volume: number | null }[];
   aeoData?: {
     questionHeadings: { suggestedHeading: string; rationale: string }[];
-    faqSuggestions: { question: string; answer: string }[];
   };
 }
 
@@ -54,17 +53,27 @@ export function useSEOChat(
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const userId = useRef(getUserId());
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Bumps on every document switch. An in-flight stream captures the version it
+  // started under and stops writing if the document changed underneath it, so a
+  // slow response from a previous doc can't inject messages into the new one.
+  const docVersionRef = useRef(0);
+  useEffect(() => {
+    docVersionRef.current += 1;
+  }, [documentId]);
 
   useEffect(() => {
     if (!documentId || historyLoaded) return;
     let cancelled = false;
     loadChatHistory(apiUrl, userId.current, documentId).then((loaded) => {
-      if (!cancelled && loaded.length > 0 && messages.length === 0) {
-        setMessages(loaded);
+      if (cancelled) return;
+      if (loaded.length > 0) {
+        // Functional update so user-typed messages during load aren't clobbered
+        setMessages((current) => (current.length === 0 ? loaded : current));
       }
-      if (!cancelled) setHistoryLoaded(true);
+      setHistoryLoaded(true);
     });
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiUrl, documentId, historyLoaded]);
 
   const scheduleSave = useCallback((msgs: ChatMessage[]) => {
@@ -81,6 +90,7 @@ export function useSEOChat(
       const updatedMessages = [...messages, userMessage];
       setMessages(updatedMessages);
       setIsStreaming(true);
+      const myVersion = docVersionRef.current;
 
       try {
         const stream = await fetchChatStream(
@@ -100,11 +110,15 @@ export function useSEOChat(
         const decoder = new TextDecoder();
         let assistantContent = "";
 
-        setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+        if (docVersionRef.current === myVersion) {
+          setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+        }
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
+          // Document switched mid-stream - stop writing into the new doc's chat.
+          if (docVersionRef.current !== myVersion) { try { await reader.cancel(); } catch { /* noop */ } break; }
 
           const chunk = decoder.decode(value, { stream: true });
           const lines = chunk.split("\n");
@@ -134,17 +148,21 @@ export function useSEOChat(
           }
         }
 
-        const finalMessages: ChatMessage[] = [
-          ...updatedMessages,
-          { role: "assistant", content: assistantContent },
-        ];
-        scheduleSave(finalMessages);
+        if (docVersionRef.current === myVersion) {
+          const finalMessages: ChatMessage[] = [
+            ...updatedMessages,
+            { role: "assistant", content: assistantContent },
+          ];
+          scheduleSave(finalMessages);
+        }
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : "Chat failed";
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: `Error: ${errorMsg}` },
-        ]);
+        if (docVersionRef.current === myVersion) {
+          const errorMsg = err instanceof Error ? err.message : "Chat failed";
+          setMessages((prev) => [
+            ...prev,
+            { role: "assistant", content: `Error: ${errorMsg}` },
+          ]);
+        }
       }
 
       setIsStreaming(false);

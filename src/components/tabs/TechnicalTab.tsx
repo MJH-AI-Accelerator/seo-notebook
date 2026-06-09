@@ -1,0 +1,551 @@
+"use client";
+
+import { useMemo } from "react";
+import { LoadingBars } from "../LoadingBars";
+import { MJH_BLUE, MJH_GOLD } from "../styles";
+import type { DocumentFields, HeadingItem, LinkCheckResult, TechnicalAuditItem } from "../../lib/types";
+import { isShortFormContent } from "../../lib/summary";
+
+interface TechnicalTabProps {
+  text: string;
+  documentFields?: DocumentFields;
+  isLoading?: boolean;
+  linkCheckResults: LinkCheckResult[];
+  isLinkCheckLoading: boolean;
+  linkCheckError: string | null;
+  hasRunLinkCheck: boolean;
+  onCheckLinks: () => void;
+}
+
+const cardStyle: React.CSSProperties = {
+  borderRadius: 14,
+  background: "rgba(255,255,255,0.55)",
+  backdropFilter: "blur(16px) saturate(170%)",
+  WebkitBackdropFilter: "blur(16px) saturate(170%)",
+  boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.85), inset 1.5px 2px 1px -1px rgba(255,255,255,1), inset -2px -3px 2px -1px rgba(255,255,255,0.6), 0 2px 6px rgba(0,0,0,0.07), 0 10px 26px rgba(0,0,0,0.08)",
+  padding: "14px",
+};
+
+function StatusBadge({ status }: { status: TechnicalAuditItem["status"] }) {
+  const map = {
+    good: { bg: "rgba(22,163,74,0.12)", color: "#16a34a", label: "Good" },
+    warning: { bg: "rgba(230,192,27,0.18)", color: "#8B7310", label: "Review" },
+    error: { bg: "rgba(220,38,38,0.1)", color: "#dc2626", label: "Fix" },
+  } as const;
+  const c = map[status];
+  return (
+    <span style={{
+      fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em",
+      padding: "2px 7px", borderRadius: 99, background: c.bg, color: c.color, flexShrink: 0,
+    }}>
+      {c.label}
+    </span>
+  );
+}
+
+function AuditCard({ label, value, status, recommendation, anchorId }: { label: string; value: string; status: TechnicalAuditItem["status"]; recommendation?: string; anchorId?: string }) {
+  return (
+    <div id={anchorId} style={cardStyle}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
+        <span style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", color: "#4b5563", fontWeight: 600 }}>{label}</span>
+        <StatusBadge status={status} />
+      </div>
+      <div style={{
+        fontSize: 12, color: status === "error" ? "#9ca3af" : "#374151", lineHeight: 1.5,
+        fontStyle: status === "error" ? "italic" : "normal", wordBreak: "break-word",
+      }}>
+        {value}
+      </div>
+      {recommendation && (
+        <div style={{
+          marginTop: 8, padding: "6px 10px",
+          background: status === "error" ? "rgba(220,38,38,0.04)" : "rgba(230,192,27,0.06)",
+          borderLeft: `2px solid ${status === "error" ? "#dc2626" : "#E6C01B"}`,
+          borderRadius: 6, fontSize: 11, color: "#1f2937", lineHeight: 1.5,
+        }}>
+          {recommendation}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const IMAGE_EXT_RE = /\.(jpe?g|png|gif|webp|svg|tiff?|bmp)$/i;
+const GENERIC_FILENAME_RE = /^(IMG_|DSC|DCIM|screenshot|photo\d*|image\d*|untitled|file_?\d+|unsplash|stock)/i;
+
+function classifyImageNames(names: string[]): { filenames: string[]; altTexts: string[] } {
+  const filenames: string[] = [];
+  const altTexts: string[] = [];
+  for (const n of names) {
+    if (IMAGE_EXT_RE.test(n)) filenames.push(n);
+    else altTexts.push(n);
+  }
+  return { filenames, altTexts };
+}
+
+function imageFilenameAudit(filenames: string[]): TechnicalAuditItem | null {
+  if (filenames.length === 0) return null;
+  const issues: { filename: string; reason: string }[] = [];
+  for (const f of filenames) {
+    const base = f.replace(IMAGE_EXT_RE, "");
+    if (GENERIC_FILENAME_RE.test(base)) {
+      issues.push({ filename: f, reason: "generic name from a camera or screenshot tool" });
+      continue;
+    }
+    if (/_/.test(base)) {
+      issues.push({ filename: f, reason: "uses underscores instead of hyphens" });
+      continue;
+    }
+    if (/\s/.test(base)) {
+      issues.push({ filename: f, reason: "contains spaces (use hyphens)" });
+      continue;
+    }
+    const words = base.split("-").filter(Boolean);
+    if (words.length < 2) {
+      issues.push({ filename: f, reason: "single word - use 2-3 descriptive hyphenated words" });
+    } else if (words.length > 7) {
+      issues.push({ filename: f, reason: "too many words - keep to 3-5" });
+    }
+  }
+  if (issues.length === 0) {
+    return {
+      label: "Image Filenames",
+      value: `${filenames.length} filename${filenames.length === 1 ? "" : "s"} look descriptive`,
+      status: "good",
+    };
+  }
+  const examples = issues.slice(0, 2).map((i) => `"${i.filename}" - ${i.reason}`).join("; ");
+  return {
+    label: "Image Filenames",
+    value: `${issues.length} of ${filenames.length} filename${filenames.length === 1 ? "" : "s"} need attention`,
+    status: "warning",
+    recommendation: `${examples}. Use 2-3 hyphenated descriptive words, ideally including the primary keyword.`,
+  };
+}
+
+// Alt-text audit. Per director guidance, alt text should be roughly 2-5
+// descriptive keywords - flag only a bare single word or text over 125 chars.
+function imageAltTextAudit(altTexts: string[]): TechnicalAuditItem | null {
+  if (altTexts.length === 0) return null;
+  const issues: { alt: string; reason: string }[] = [];
+  let audited = 0; // non-empty alt texts actually evaluated (blank = decorative, skipped)
+  for (const alt of altTexts) {
+    const trimmed = alt.trim();
+    if (!trimmed) continue;
+    audited++;
+    const len = trimmed.length;
+    const wc = trimmed.split(/\s+/).filter(Boolean).length;
+    if (len > 125) {
+      issues.push({ alt: trimmed, reason: `${len} chars - shorten to under 125` });
+    } else if (wc < 2) {
+      issues.push({ alt: trimmed, reason: "just one word - use 2-5 descriptive keywords" });
+    }
+  }
+  if (audited === 0) return null; // all images have intentionally-empty (decorative) alt
+  if (issues.length === 0) {
+    return {
+      label: "Image Alt Text",
+      value: `${audited} alt text${audited === 1 ? "" : "s"} look well-formed`,
+      status: "good",
+    };
+  }
+  const examples = issues.slice(0, 2).map((i) => {
+    const short = i.alt.length > 50 ? `${i.alt.slice(0, 50)}...` : i.alt;
+    return `"${short}" - ${i.reason}`;
+  }).join("; ");
+  return {
+    label: "Image Alt Text",
+    value: `${issues.length} of ${audited} alt text${audited === 1 ? "" : "s"} need attention`,
+    status: "warning",
+    recommendation: `${examples}. Alt text should be 2-5 descriptive keywords that describe the image, ideally including the primary keyword, and stay under 125 characters.`,
+  };
+}
+
+// Image title audit. Per the director, the title attribute (hover tooltip) sends
+// an SEO signal, so each image should carry a short descriptive title.
+// When NONE of the document's images have a title field at all, the host schema
+// likely doesn't expose one - skip silently rather than flag every image.
+function imageTitleAudit(titles: string[], imageCount: number): TechnicalAuditItem | null {
+  if (imageCount <= 0) return null;
+  const withTitle = titles.length;
+  if (withTitle === 0) return null; // schema doesn't expose a title field - skip
+  const missing = imageCount - withTitle;
+  if (missing > 0) {
+    return {
+      label: "Image Titles",
+      value: `${withTitle} of ${imageCount} image${imageCount === 1 ? "" : "s"} ${withTitle === 1 ? "has" : "have"} a title`,
+      status: "warning",
+      recommendation: `Add a descriptive title attribute (2-5 keywords) to the ${missing} image${missing === 1 ? "" : "s"} without one. The title appears on hover and sends an SEO signal.`,
+    };
+  }
+  const sparse = titles.filter((t) => t.trim().split(/\s+/).filter(Boolean).length < 2);
+  if (sparse.length > 0) {
+    return {
+      label: "Image Titles",
+      value: `${sparse.length} image title${sparse.length === 1 ? "" : "s"} ${sparse.length === 1 ? "is" : "are"} a single word`,
+      status: "warning",
+      recommendation: "Use 2-5 descriptive keywords in each image title, not a single word.",
+    };
+  }
+  return {
+    label: "Image Titles",
+    value: `All ${imageCount} image${imageCount === 1 ? "" : "s"} have a descriptive title`,
+    status: "good",
+  };
+}
+
+function computeHeadingStructureAudits(headings: HeadingItem[], wordCount: number): TechnicalAuditItem[] {
+  const audits: TechnicalAuditItem[] = [];
+  // Count H2 AND H3 as section headings: an article sectioned only with H3s is
+  // still sectioned, so it shouldn't be told it has "no section headings". Mirrors
+  // the plugin + summary.ts.
+  const sectionCount = headings.filter((h) => h.level === 2 || h.level === 3).length;
+
+  // Heading-density check. Long articles need more section breaks; thresholds
+  // backed by SEO best-practice research. Order matters: the zero-section case is
+  // an error and must be checked before the softer warnings so it matches summary.ts.
+  let densityFired = false;
+  if (wordCount >= 1000 && sectionCount === 0) {
+    audits.push({
+      label: "Section Headings",
+      value: `No section headings in a ${wordCount}-word article`,
+      status: "error",
+      recommendation: "Articles this long need section headings. Add 2-3 H2 (or H3) headings to break the body into scannable sections.",
+    });
+    densityFired = true;
+  } else if (wordCount >= 2500 && sectionCount < 5) {
+    audits.push({
+      label: "Section Headings",
+      value: `${sectionCount} section heading${sectionCount === 1 ? "" : "s"} for a ${wordCount}-word article`,
+      status: "warning",
+      recommendation: "Long articles read best with 1 section heading per 300-400 words. Break the content into more named sections so readers and search engines can navigate it.",
+    });
+    densityFired = true;
+  } else if (wordCount >= 1500 && sectionCount < 3) {
+    audits.push({
+      label: "Section Headings",
+      value: `${sectionCount} section heading${sectionCount === 1 ? "" : "s"} for a ${wordCount}-word article`,
+      status: "warning",
+      recommendation: "Articles above 1,500 words usually need at least 3 named sections. Add section breaks so the outline is scannable.",
+    });
+    densityFired = true;
+  }
+
+  if (headings.length === 0) {
+    if (!densityFired) {
+      audits.push({
+        label: "Heading Structure",
+        value: "No headings in body",
+        status: "warning",
+        recommendation: "Add H2 headings to break the article into scannable sections.",
+      });
+    }
+    return audits;
+  }
+  const h1s = headings.filter((h) => h.level === 1);
+  if (h1s.length > 0) {
+    audits.push({
+      label: "H1 in body",
+      value: `${h1s.length} H1 heading${h1s.length === 1 ? "" : "s"} in the body`,
+      status: "warning",
+      recommendation: "The article title is your H1. Body headings should start at H2 so the outline isn't ambiguous.",
+    });
+  }
+  let prevLevel = 0;
+  const skips: { from: number; to: number; at: string }[] = [];
+  for (const h of headings) {
+    if (prevLevel > 0 && h.level > prevLevel + 1) skips.push({ from: prevLevel, to: h.level, at: h.text || "(empty)" });
+    prevLevel = h.level;
+  }
+  if (skips.length > 0) {
+    const first = skips[0];
+    audits.push({
+      label: "Heading Hierarchy",
+      value: `${skips.length} skipped level${skips.length === 1 ? "" : "s"}`,
+      status: "warning",
+      recommendation: `Headings jump from H${first.from} to H${first.to} at "${first.at.slice(0, 60)}". Use sequential levels (H2 → H3 → H4) so the outline reads cleanly to screen readers and search engines.`,
+    });
+  }
+  const empties = headings.filter((h) => !h.text.trim());
+  if (empties.length > 0) {
+    audits.push({
+      label: "Empty Headings",
+      value: `${empties.length} empty heading${empties.length === 1 ? "" : "s"}`,
+      status: "error",
+      recommendation: "Either remove the empty heading blocks or fill them with text. Empty headings confuse the outline.",
+    });
+  }
+  if (audits.length === 0) {
+    audits.push({
+      label: "Heading Structure",
+      value: `${headings.length} heading${headings.length === 1 ? "" : "s"}, hierarchy is clean`,
+      status: "good",
+    });
+  }
+  return audits;
+}
+
+function StatTile({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div style={{ padding: "8px 4px", background: "rgba(0,0,0,0.025)", borderRadius: 8, textAlign: "center" }}>
+      <div style={{ fontSize: 18, fontWeight: 700, color, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: 9, fontWeight: 700, color: "#4b5563", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 4 }}>{label}</div>
+    </div>
+  );
+}
+
+function LinkIssueRow({ result }: { result: LinkCheckResult }) {
+  const map = {
+    ok: { bg: "rgba(22,163,74,0.06)", color: "#16a34a", label: "OK" },
+    redirect: { bg: "rgba(230,192,27,0.12)", color: "#8B7310", label: result.status > 0 ? String(result.status) : "REDIR" },
+    broken: { bg: "rgba(220,38,38,0.06)", color: "#dc2626", label: result.status > 0 ? String(result.status) : "404" },
+    unverified: { bg: "rgba(245,158,11,0.10)", color: "#b45309", label: result.status > 0 ? String(result.status) : "BLOCKED" },
+    error: { bg: "rgba(220,38,38,0.06)", color: "#dc2626", label: "ERR" },
+  } as const;
+  const c = map[result.category];
+  const tooltip = result.category === "unverified"
+    ? `${result.url} (couldn't auto-check; likely anti-bot blocking - open manually to verify)`
+    : result.error ? `${result.url} (${result.error})` : result.url;
+  return (
+    <a
+      href={result.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{
+        display: "flex", alignItems: "center", gap: 8, padding: "6px 10px",
+        background: c.bg, borderRadius: 6, textDecoration: "none",
+      }}
+    >
+      <span style={{
+        fontSize: 9, fontWeight: 700, letterSpacing: "0.04em",
+        padding: "2px 6px", borderRadius: 99, background: "#ffffff", color: c.color,
+        fontVariantNumeric: "tabular-nums", flexShrink: 0,
+      }}>
+        {c.label}
+      </span>
+      <span
+        style={{
+          fontSize: 11, color: "#1f2937",
+          fontFamily: "ui-monospace, SFMono-Regular, monospace",
+          flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}
+        title={tooltip}
+      >
+        {result.url}
+      </span>
+    </a>
+  );
+}
+
+function LinkCheckCard({ urls, results, isLoading, error, hasRun, onCheck }: { urls: string[]; results: LinkCheckResult[]; isLoading: boolean; error: string | null; hasRun: boolean; onCheck: () => void }) {
+  const counts = useMemo(() => {
+    const total = results.length;
+    const valid = results.filter((r) => r.category === "ok").length;
+    const redirects = results.filter((r) => r.category === "redirect").length;
+    const broken = results.filter((r) => r.category === "broken").length;
+    const errored = results.filter((r) => r.category === "error").length;
+    const unverified = results.filter((r) => r.category === "unverified").length;
+    const issues = results.filter((r) => r.category !== "ok");
+    return { total, valid, redirects, broken, errored, unverified, issues };
+  }, [results]);
+
+  return (
+    <div id="anchor-link-check" style={cardStyle}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
+        <span style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", color: "#4b5563", fontWeight: 600 }}>
+          Link Health
+        </span>
+        {hasRun && !isLoading && (
+          <button onClick={onCheck} style={{ background: "none", border: "none", fontSize: 10, fontWeight: 600, color: MJH_BLUE, cursor: "pointer", padding: "2px 4px" }} title="Run again">Re-check</button>
+        )}
+      </div>
+
+      <div style={{ fontSize: 11, color: "#1f2937", lineHeight: 1.5, marginBottom: 10 }}>
+        {urls.length === 0
+          ? "No external links found in the body."
+          : `${urls.length} link${urls.length === 1 ? "" : "s"} found in the body.`}
+      </div>
+
+      {urls.length > 0 && !hasRun && !isLoading && (
+        <button onClick={onCheck} style={{
+          width: "100%", padding: "8px 12px", fontSize: 11, fontWeight: 700,
+          color: "#1f2937", background: MJH_GOLD, border: "none", borderRadius: 6, cursor: "pointer", letterSpacing: "0.01em",
+        }}>
+          Check {urls.length} link{urls.length === 1 ? "" : "s"} for 404s
+        </button>
+      )}
+
+      {isLoading && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "16px 0" }}>
+          <LoadingBars size="xs" color={MJH_BLUE} />
+          <span style={{ fontSize: 11, color: "#4b5563" }}>Checking {urls.length} link{urls.length === 1 ? "" : "s"}...</span>
+        </div>
+      )}
+
+      {error && !isLoading && (
+        <div style={{
+          padding: "10px 12px", background: "rgba(220,38,38,0.04)",
+          border: "1px solid rgba(220,38,38,0.18)", borderRadius: 8,
+          fontSize: 11, color: "#b91c1c", lineHeight: 1.5,
+        }}>
+          {error}
+          <button onClick={onCheck} style={{
+            display: "block", marginTop: 6, padding: "4px 10px",
+            fontSize: 11, fontWeight: 700, color: "#ffffff", background: "#dc2626",
+            border: "none", borderRadius: 5, cursor: "pointer",
+          }}>Try again</button>
+        </div>
+      )}
+
+      {hasRun && !isLoading && !error && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: counts.unverified > 0 ? "repeat(5, 1fr)" : "repeat(4, 1fr)", gap: 6 }}>
+            <StatTile label="Checked" value={counts.total} color="#475569" />
+            <StatTile label="Valid" value={counts.valid} color="#16a34a" />
+            <StatTile label="Redirects" value={counts.redirects} color="#8B7310" />
+            <StatTile label="Broken" value={counts.broken + counts.errored} color="#dc2626" />
+            {counts.unverified > 0 && (
+              <StatTile label="Blocked" value={counts.unverified} color="#b45309" />
+            )}
+          </div>
+          {counts.unverified > 0 && (
+            <div style={{
+              marginTop: 8, padding: "6px 10px",
+              background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)",
+              borderRadius: 6, fontSize: 10.5, color: "#92400e", lineHeight: 1.45,
+            }}>
+              {counts.unverified} link{counts.unverified === 1 ? "" : "s"} were blocked from our auto-check (likely
+              anti-bot rules on the destination site). They may still work fine for human readers - click each to confirm.
+            </div>
+          )}
+          {counts.issues.length > 0 ? (
+            <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#4b5563", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                {counts.issues.length} link{counts.issues.length === 1 ? "" : "s"} need{counts.issues.length === 1 ? "s" : ""} attention
+              </div>
+              {counts.issues.map((r) => <LinkIssueRow key={r.url} result={r} />)}
+            </div>
+          ) : (
+            <div style={{
+              marginTop: 12, padding: "8px 10px",
+              background: "rgba(22,163,74,0.05)", border: "1px solid rgba(22,163,74,0.15)",
+              borderRadius: 8, fontSize: 11, color: "#16a34a", fontWeight: 600, textAlign: "center",
+            }}>
+              All {counts.total} link{counts.total === 1 ? "" : "s"} resolve cleanly.
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+export function TechnicalTab({
+  text, documentFields, isLoading,
+  linkCheckResults, isLinkCheckLoading, linkCheckError, hasRunLinkCheck, onCheckLinks,
+}: TechnicalTabProps) {
+  const headings = documentFields?.headings || [];
+  const headingsDetailed = documentFields?.headingsDetailed;
+  const headingsForStructure: HeadingItem[] = headingsDetailed ?? headings.map((t) => ({ text: t, level: 2 }));
+  const wordCount = text ? text.split(/\s+/).filter(Boolean).length : 0;
+  const structureAudits = useMemo(() => computeHeadingStructureAudits(headingsForStructure, wordCount), [headingsForStructure, wordCount]);
+
+  const imageNames = documentFields?.imageNames || [];
+  const { filenames: imageFilenames, altTexts: imageAltTexts } = useMemo(
+    () => classifyImageNames(imageNames),
+    [imageNames]
+  );
+  const filenameAudit = useMemo(() => imageFilenameAudit(imageFilenames), [imageFilenames]);
+  const altTextAudit = useMemo(() => imageAltTextAudit(imageAltTexts), [imageAltTexts]);
+  const imageTitles = documentFields?.imageTitles || [];
+  const imageCount = documentFields?.imageCount ?? 0;
+  const imgTitleAudit = useMemo(() => imageTitleAudit(imageTitles, imageCount), [imageTitles, imageCount]);
+  const hasImages = imageCount > 0 || imageNames.length > 0;
+  const imagesAudit: TechnicalAuditItem | null = !hasImages
+    ? { label: "Images", value: "No images detected", status: "warning", recommendation: "Add at least one hero image with descriptive alt text. Articles with images perform better on both reader engagement and search." }
+    : null;
+
+  // Empty body = the editor hasn't written yet (or it hasn't loaded); show no card
+  // rather than a red "Fix" alarm, matching summary.ts.
+  // Videos / podcasts / news / briefs are legitimately short - exempt from the floor.
+  const isShortForm = isShortFormContent(documentFields, documentFields?.title);
+  const wordAudit: TechnicalAuditItem | null = wordCount === 0
+    ? null
+    : isShortForm
+    ? { label: "Word Count", value: `${wordCount} words`, status: "good" }
+    : wordCount < 450
+    ? { label: "Word Count", value: `${wordCount} words`, status: "error", recommendation: "Body copy should be at least 450 words. Add more written content." }
+    : wordCount < 1500
+    ? { label: "Word Count", value: `${wordCount} words`, status: "warning", recommendation: "Above the 450-word floor. For competitive clinical content, push past 1,500 words." }
+    : { label: "Word Count", value: `${wordCount} words`, status: "good" };
+
+  const bodyLinks = documentFields?.bodyLinks || [];
+
+  const hasAnyField = !!documentFields && (
+    documentFields.title !== undefined ||
+    (documentFields.headings && documentFields.headings.length > 0) ||
+    (documentFields.imageNames && documentFields.imageNames.length > 0) ||
+    wordCount > 0
+  );
+  if (isLoading && !hasAnyField) {
+    return (
+      <div style={{ padding: 24, textAlign: "center" }}>
+        <div style={{ fontSize: 13, color: "#4b5563", fontWeight: 500 }}>Reading document fields...</div>
+        <div style={{ fontSize: 11, color: "#4b5563", marginTop: 4 }}>Audit will run once content loads</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+      {wordAudit && <AuditCard anchorId="anchor-word-count" label={wordAudit.label} value={wordAudit.value} status={wordAudit.status} recommendation={wordAudit.recommendation} />}
+
+      {structureAudits.map((a, i) => (
+        <AuditCard key={`structure-${i}`} anchorId={i === 0 ? "anchor-headings-structure" : undefined} label={a.label} value={a.value} status={a.status} recommendation={a.recommendation} />
+      ))}
+
+      {headings.length > 0 && (
+        <div id="anchor-headings-outline" style={{ ...cardStyle, padding: "8px 14px" }}>
+          <div style={{ fontSize: 10, color: "#4b5563", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600, marginBottom: 6 }}>
+            Heading Outline
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {(headingsDetailed ? headingsDetailed.slice(0, 12) : headings.slice(0, 12).map((h) => ({ text: h, level: 2 }))).map((h, i) => (
+              <div key={i} style={{
+                fontSize: 11, color: h.text ? "#4b5563" : "#dc2626",
+                fontStyle: h.text ? "normal" : "italic", lineHeight: 1.4,
+                paddingLeft: Math.max(0, (h.level - 2) * 12),
+              }}>
+                <span style={{ fontSize: 9, fontWeight: 700, color: "#4b5563", marginRight: 6 }}>H{h.level}</span>
+                {h.text || "(empty)"}
+              </div>
+            ))}
+            {headings.length > 12 && <div style={{ fontSize: 10, color: "#4b5563" }}>+ {headings.length - 12} more</div>}
+          </div>
+        </div>
+      )}
+
+      {imagesAudit && (
+        <AuditCard anchorId="anchor-images" label={imagesAudit.label} value={imagesAudit.value} status={imagesAudit.status} recommendation={imagesAudit.recommendation} />
+      )}
+      {filenameAudit && (
+        <AuditCard anchorId="anchor-image-filenames" label={filenameAudit.label} value={filenameAudit.value} status={filenameAudit.status} recommendation={filenameAudit.recommendation} />
+      )}
+      {altTextAudit && (
+        <AuditCard anchorId="anchor-image-alt" label={altTextAudit.label} value={altTextAudit.value} status={altTextAudit.status} recommendation={altTextAudit.recommendation} />
+      )}
+      {imgTitleAudit && (
+        <AuditCard anchorId="anchor-image-titles" label={imgTitleAudit.label} value={imgTitleAudit.value} status={imgTitleAudit.status} recommendation={imgTitleAudit.recommendation} />
+      )}
+
+      <LinkCheckCard
+        urls={bodyLinks}
+        results={linkCheckResults}
+        isLoading={isLinkCheckLoading}
+        error={linkCheckError}
+        hasRun={hasRunLinkCheck}
+        onCheck={onCheckLinks}
+      />
+    </div>
+  );
+}

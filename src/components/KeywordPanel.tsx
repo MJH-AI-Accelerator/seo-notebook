@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useConfig } from "./ConfigContext";
 import { PlacementIndicators } from "./PlacementIndicators";
 import { SeedKeywordInput } from "./SeedKeywordInput";
@@ -8,8 +8,6 @@ import { FeedbackButton } from "./FeedbackButton";
 import { LoadingBars } from "./LoadingBars";
 import { MJH_GOLD, MJH_BLUE } from "./styles";
 import type { PrimaryKeywordCandidate, DocumentFields, KeywordPlacement } from "../lib/types";
-
-const AEO_PURPLE = "#7C3AED";
 
 interface KeywordPanelProps {
   text: string;
@@ -43,7 +41,7 @@ function SectionHeader({ label, iconColor, actionButton }: { label: string; icon
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
       <div style={{ width: 7, height: 7, borderRadius: "50%", background: iconColor, flexShrink: 0 }} />
-      <span style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", color: "#94a3b8", fontWeight: 600, flex: 1 }}>
+      <span style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", color: "#4b5563", fontWeight: 600, flex: 1 }}>
         {label}
       </span>
       {actionButton}
@@ -53,8 +51,10 @@ function SectionHeader({ label, iconColor, actionButton }: { label: string; icon
 
 const cardStyle = {
   borderRadius: 14,
-  background: "#ffffff",
-  boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 0 0 1px rgba(0,0,0,0.03)",
+  background: "rgba(255,255,255,0.55)",
+  backdropFilter: "blur(16px) saturate(170%)",
+  WebkitBackdropFilter: "blur(16px) saturate(170%)",
+  boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.85), inset 1.5px 2px 1px -1px rgba(255,255,255,1), inset -2px -3px 2px -1px rgba(255,255,255,0.6), 0 2px 6px rgba(0,0,0,0.07), 0 10px 26px rgba(0,0,0,0.08)",
   padding: "14px",
 };
 
@@ -119,19 +119,26 @@ function LightbulbButton({ onClick, isLoading }: { onClick: () => void; isLoadin
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        position: "relative", cursor: isLoading ? "wait" : "pointer", fontSize: 14, lineHeight: 1,
+        position: "relative", cursor: isLoading ? "wait" : "pointer", lineHeight: 1,
         opacity: isLoading ? 0.5 : 1, flexShrink: 0, display: "inline-flex", alignItems: "center",
+        color: hovered ? MJH_GOLD : "#9ca3af", transition: "color 150ms",
       }}
-      title="How to use this keyword"
+      title="Show how to use this keyword"
     >
-      {isLoading ? <LoadingBars size="xs" color={MJH_GOLD} /> : "\u{1F4A1}"}
+      {isLoading ? (
+        <LoadingBars size="xs" color={MJH_GOLD} />
+      ) : (
+        <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+          <path fillRule="evenodd" d="M10 1a6 6 0 00-3.815 10.631C7.001 12.097 7.5 12.93 7.5 13.875V15a2.5 2.5 0 002.5 2.5h0a2.5 2.5 0 002.5-2.5v-1.125c0-.945.498-1.778 1.315-2.244A6 6 0 0010 1zM8.025 13H9.5v-2.077a.75.75 0 011.5 0V13h1.475A4.5 4.5 0 0011.5 9.86V5.75a.75.75 0 00-1.5 0v4.11a4.5 4.5 0 00-1.975 3.14z" clipRule="evenodd" />
+        </svg>
+      )}
       {hovered && !isLoading && (
         <span style={{
           position: "absolute", bottom: "100%", left: "50%", transform: "translateX(-50%)",
           marginBottom: 4, padding: "2px 6px", borderRadius: 4, background: "#1f2937",
           color: "#ffffff", fontSize: 10, whiteSpace: "nowrap", pointerEvents: "none", zIndex: 10,
         }}>
-          How to use
+          See suggestion
         </span>
       )}
     </span>
@@ -172,14 +179,14 @@ function KeywordHelpDisplay({ suggestions, onRegenerate, isRegenerating, term, p
             <div style={{ flex: 1 }}>
               {s.type === "change" ? (
                 <>
-                  <div style={{ color: "#9ca3af", fontWeight: 600, fontSize: 10, textTransform: "uppercase", marginBottom: 2 }}>Change</div>
+                  <div style={{ color: "#4b5563", fontWeight: 600, fontSize: 10, textTransform: "uppercase", marginBottom: 2 }}>Change</div>
                   <div style={{ color: "#991b1b", textDecoration: "line-through", marginBottom: 2 }}>{s.original}</div>
                   <div style={{ color: "#166534" }}><HighlightKeyword text={s.revised || ""} keyword={term} /></div>
                 </>
               ) : (
                 <>
-                  <div style={{ color: "#9ca3af", fontWeight: 600, fontSize: 10, textTransform: "uppercase", marginBottom: 2 }}>Add{s.where ? ` - ${s.where}` : ""}</div>
-                  <div style={{ color: "#374151" }}><HighlightKeyword text={s.sentence || ""} keyword={term} /></div>
+                  <div style={{ color: "#4b5563", fontWeight: 600, fontSize: 10, textTransform: "uppercase", marginBottom: 2 }}>Add{s.where ? ` - ${s.where}` : ""}</div>
+                  <div style={{ color: "#1f2937" }}><HighlightKeyword text={s.sentence || ""} keyword={term} /></div>
                 </>
               )}
             </div>
@@ -302,9 +309,9 @@ function PrimaryKeywordSelector({
                     {candidate.term}
                   </span>
                   {candidate.volume != null && (
-                    <span style={{ fontSize: 11, color: "#9ca3af" }}>{abbrevVol(candidate.volume)}/mo</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "#1f2937" }}>{abbrevVol(candidate.volume)}/mo</span>
                   )}
-                  <span style={{ fontSize: 10, color: "#9ca3af" }}>
+                  <span style={{ fontSize: 10, color: "#1f2937" }}>
                     {Math.round(candidate.confidence * 100)}% confidence
                   </span>
                 </div>
@@ -496,7 +503,7 @@ function SuggestedKeywordsCard({
     <div style={cardStyle}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
         <div style={{ width: 6, height: 6, borderRadius: "50%", background: MJH_BLUE, flexShrink: 0 }} />
-        <span style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", color: "#9ca3af", fontWeight: 600, flex: 1 }}>
+        <span style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", color: "#4b5563", fontWeight: 600, flex: 1 }}>
           Supporting Keywords
         </span>
         {refreshVolumes && (
@@ -512,7 +519,7 @@ function SuggestedKeywordsCard({
             )}
           </button>
         )}
-        <button onClick={() => setSortAsc(!sortAsc)} style={{ background: "none", border: "none", cursor: "pointer", padding: 2, display: "flex", color: "#9ca3af", fontSize: 10 }} title={sortAsc ? "Sort: least placements first" : "Sort: most placements first"}>
+        <button onClick={() => setSortAsc(!sortAsc)} style={{ background: "none", border: "none", cursor: "pointer", padding: 2, display: "flex", color: "#4b5563", fontSize: 10 }} title={sortAsc ? "Sort: least placements first" : "Sort: most placements first"}>
           <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor" style={{ transform: sortAsc ? "rotate(180deg)" : "none", transition: "transform 150ms" }}>
             <path fillRule="evenodd" d="M10 3a.75.75 0 01.55.24l3.25 3.5a.75.75 0 11-1.1 1.02L10 4.852 7.3 7.76a.75.75 0 01-1.1-1.02l3.25-3.5A.75.75 0 0110 3zm-3.76 9.2a.75.75 0 011.06.04l2.7 2.908 2.7-2.908a.75.75 0 111.1 1.02l-3.25 3.5a.75.75 0 01-1.1 0l-3.25-3.5a.75.75 0 01.04-1.06z" clipRule="evenodd" />
           </svg>
@@ -541,7 +548,7 @@ function SuggestedKeywordsCard({
               {PLACEMENT_FILTERS.map(({ key, label, letter }) => (
                 <button key={key} onClick={() => toggleFilter(key)} style={{
                   width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "5px 10px",
-                  background: "none", border: "none", cursor: "pointer", fontSize: 11, color: "#374151", textAlign: "left",
+                  background: "none", border: "none", cursor: "pointer", fontSize: 11, color: "#1f2937", textAlign: "left",
                 }}>
                   <div style={{
                     width: 14, height: 14, borderRadius: 3, border: "1.5px solid " + (activeFilters.has(key) ? MJH_BLUE : "#d1d5db"),
@@ -552,13 +559,13 @@ function SuggestedKeywordsCard({
                       <svg width="8" height="8" viewBox="0 0 12 12" fill="white"><path d="M10 3L4.5 8.5 2 6" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
                     )}
                   </div>
-                  <span style={{ fontWeight: 600, color: "#9ca3af", width: 14 }}>{letter}</span>
+                  <span style={{ fontWeight: 600, color: "#4b5563", width: 14 }}>{letter}</span>
                   <span>{label}</span>
                 </button>
               ))}
               <button onClick={() => toggleFilter("none")} style={{
                 width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "5px 10px",
-                background: "none", border: "none", cursor: "pointer", fontSize: 11, color: "#374151", textAlign: "left", borderTop: "1px solid #f1f5f9",
+                background: "none", border: "none", cursor: "pointer", fontSize: 11, color: "#1f2937", textAlign: "left", borderTop: "1px solid #f1f5f9",
               }}>
                 <div style={{
                   width: 14, height: 14, borderRadius: 3, border: "1.5px solid " + (activeFilters.has("none") ? MJH_BLUE : "#d1d5db"),
@@ -569,7 +576,7 @@ function SuggestedKeywordsCard({
                     <svg width="8" height="8" viewBox="0 0 12 12" fill="white"><path d="M10 3L4.5 8.5 2 6" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
                   )}
                 </div>
-                <span style={{ fontWeight: 600, color: "#9ca3af", width: 14 }}>-</span>
+                <span style={{ fontWeight: 600, color: "#4b5563", width: 14 }}>-</span>
                 <span>None (missing all)</span>
               </button>
               {activeFilters.size > 0 && (
@@ -610,10 +617,10 @@ function SuggestedKeywordsCard({
               borderBottom: i < visible.length - 1 ? "1px solid #f3f4f6" : "none", minHeight: 28,
             }}>
               <div style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, background: kw.inContent ? "#16a34a" : "#d1d5db" }} />
-              <span style={{ fontSize: 12, fontWeight: 500, flexGrow: 1, color: kw.inContent ? "#9ca3af" : "#374151" }}>{kw.term}</span>
-              {enrichingTerms.has(kw.term) && <LoadingBars size="xs" color="#9ca3af" />}
+              <span style={{ fontSize: 12, fontWeight: kw.inContent ? 500 : 600, flexGrow: 1, color: "#1f2937" }}>{kw.term}</span>
+              {enrichingTerms.has(kw.term) && <LoadingBars size="xs" color="#6b7280" />}
               {!enrichingTerms.has(kw.term) && kw.volume != null && (
-                <span style={{ fontSize: 10, color: "#d1d5db", flexShrink: 0 }}>{abbrevVol(kw.volume)}</span>
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: "#1f2937", flexShrink: 0 }} title="Monthly searches">{abbrevVol(kw.volume)}/mo</span>
               )}
               {kw.placement && <PlacementIndicators placement={kw.placement} />}
               {!kw.inContent && <LightbulbButton onClick={() => fetchHelp(kw.term)} isLoading={loadingTerm === kw.term} />}
@@ -631,7 +638,7 @@ function SuggestedKeywordsCard({
       {!expanded && hiddenCount > 0 && (
         <button onClick={() => setExpanded(true)} style={{
           marginTop: 6, width: "100%", padding: "4px 0", background: "none", border: "none",
-          cursor: "pointer", fontSize: 10, color: "#9ca3af", display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+          cursor: "pointer", fontSize: 10, color: "#4b5563", display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
         }}>
           <svg width="10" height="10" viewBox="0 0 20 20" fill="#9ca3af">
             <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
@@ -676,38 +683,17 @@ export function KeywordPanel({
   const runDeepAnalysis = externalAnalysis?.runDeepAnalysis ?? (() => {});
   const isVolumesLoading = externalAnalysis?.isVolumesLoading ?? false;
   const refreshVolumes = externalAnalysis?.refreshVolumes;
-  const aeoContentChanged = externalAnalysis?.aeoContentChanged ?? false;
 
   // Track the text snapshot when AEO was last triggered to prevent re-fires on same content
   const aeoTextRef = useRef("");
   useEffect(() => {
     if (!externalAnalysis) return;
-    const hasV2Aeo = deepAnalysis?.aeo?.questionHeadings?.length || deepAnalysis?.aeo?.faqSuggestions?.length;
+    const hasV2Aeo = deepAnalysis?.aeo?.questionHeadings?.length;
     if (analysis && !hasV2Aeo && !isDeepLoading && text !== aeoTextRef.current) {
       aeoTextRef.current = text;
       runDeepAnalysis();
     }
   }, [externalAnalysis, analysis, deepAnalysis, isDeepLoading, text, runDeepAnalysis]);
-
-  const [moreFaqs, setMoreFaqs] = useState<{ question: string; answer: string }[]>([]);
-  const [isMoreFaqsLoading, setIsMoreFaqsLoading] = useState(false);
-  const loadMoreFaqs = useCallback(async () => {
-    const aeo = deepAnalysis?.aeo;
-    const existingQs = [...(aeo?.faqSuggestions ?? aeo?.faqItems ?? []).map((f: { question: string }) => f.question), ...moreFaqs.map(f => f.question)];
-    setIsMoreFaqsLoading(true);
-    try {
-      const res = await fetch(`${apiUrl}/api/seo-copilot/more-faqs`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: text, existingQuestions: existingQs, publication }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setMoreFaqs(prev => [...prev, ...(data.faqSuggestions || [])]);
-      }
-    } catch { /* silent */ }
-    setIsMoreFaqsLoading(false);
-  }, [deepAnalysis, moreFaqs, apiUrl, text, publication]);
 
   const defaultSelectedTerm = analysis?.primaryKeyword?.term ?? "";
   const [selectedPrimaryTerm, setSelectedPrimaryTerm] = useState(defaultSelectedTerm);
@@ -732,8 +718,8 @@ export function KeywordPanel({
   if ((!text || text.trim().length < 20) && (!seedKeywords || seedKeywords.length === 0)) {
     return (
       <div style={{ padding: 24, textAlign: "center" }}>
-        <div style={{ fontSize: 14, color: "#9ca3af", fontWeight: 500 }}>Start writing to see keyword suggestions</div>
-        <div style={{ fontSize: 12, color: "#d1d5db", marginTop: 4 }}>Need at least a few sentences</div>
+        <div style={{ fontSize: 14, color: "#4b5563", fontWeight: 500 }}>Start writing to see keyword suggestions</div>
+        <div style={{ fontSize: 12, color: "#4b5563", marginTop: 4 }}>Need at least a few sentences</div>
       </div>
     );
   }
@@ -742,7 +728,7 @@ export function KeywordPanel({
     return (
       <div style={{ padding: 24, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
         <LoadingBars />
-        <span style={{ fontSize: 12, color: "#9ca3af" }}>Analyzing content...</span>
+        <span style={{ fontSize: 12, color: "#4b5563" }}>Analyzing content...</span>
       </div>
     );
   }
@@ -787,115 +773,19 @@ export function KeywordPanel({
         />
       )}
 
-      {!deepAnalysis && isDeepLoading ? (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px 0" }}>
-          <LoadingBars size="xs" color={AEO_PURPLE} />
-          <span style={{ fontSize: 12, color: "#9ca3af" }}>Generating AEO insights...</span>
-        </div>
-      ) : deepAnalysis ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ padding: "6px 10px", background: "#fefce8", borderRadius: 8, border: "1px solid #fde68a" }}>
-            <div style={{ fontSize: 10, color: "#92400e", lineHeight: 1.5 }}>
-              Answers generated by AI may contain inaccuracies. Always verify facts, drug information, and clinical details before publishing.
-            </div>
-          </div>
-
-          <div style={{ ...cardStyle, padding: "8px 14px", background: "rgba(124,58,237,0.03)", borderLeft: "3px solid " + AEO_PURPLE }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-              <div style={{ width: 7, height: 7, borderRadius: "50%", background: AEO_PURPLE, flexShrink: 0 }} />
-              <span style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", color: "#94a3b8", fontWeight: 600 }}>AEO Insights</span>
-            </div>
-          </div>
-
-          {!deepAnalysis.aeo && (
-            <div style={{ ...cardStyle, textAlign: "center" }}>
-              <span style={{ fontSize: 12, color: "#9ca3af" }}>No AEO data was returned. Try again - the analysis may have timed out.</span>
-            </div>
-          )}
-
-          {deepAnalysis.aeo && (deepAnalysis.aeo.questionHeadings ?? deepAnalysis.aeo.headingSuggestions ?? []).length > 0 && (
-            <div style={cardStyle}>
-              <SectionHeader label="Question Headline Recommendations" iconColor={AEO_PURPLE} />
-              <div style={{ fontSize: 10, color: "#9ca3af", marginBottom: 8, marginTop: -4 }}>
-                Rewrite your headings as questions. Google targets these for featured snippets.
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {(deepAnalysis.aeo.questionHeadings?.map((qh) => ({ heading: qh.suggestedHeading, originalHeading: qh.originalHeading, rationale: qh.rationale })) ?? deepAnalysis.aeo.headingSuggestions?.map((h) => ({ heading: h.heading, originalHeading: undefined as string | undefined, rationale: h.rationale })) ?? []).map((h, i) => (
-                  <div key={i} style={{ padding: "8px 10px", background: "rgba(124,58,237,0.03)", borderRadius: 10, borderLeft: "3px solid " + AEO_PURPLE }}>
-                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-                      <div style={{ flex: 1 }}>
-                        {h.originalHeading && (
-                          <div style={{ fontSize: 11, color: "#9ca3af", textDecoration: "line-through", marginBottom: 2 }}>{h.originalHeading}</div>
-                        )}
-                        <div style={{ fontSize: 12, fontWeight: 700, color: AEO_PURPLE, lineHeight: 1.5 }}>{h.heading}</div>
-                      </div>
-                      <FeedbackButton suggestionType="aeo_heading" suggestionText={h.heading} publication={publication} />
-                    </div>
-                    <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 4, fontStyle: "italic" }}>{h.rationale}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {(() => {
-            const faqs = deepAnalysis.aeo ? [...(deepAnalysis.aeo.faqSuggestions ?? deepAnalysis.aeo.faqItems ?? []), ...moreFaqs] : [];
-            return faqs.length > 0 ? (
-              <div style={cardStyle}>
-                <SectionHeader label="FAQ Suggestions" iconColor={AEO_PURPLE} />
-                <div style={{ fontSize: 10, color: "#9ca3af", marginBottom: 8, marginTop: -4 }}>
-                  Add these Q&As at the bottom of your article. Can be wrapped with FAQ schema markup.
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {faqs.map((faq, i) => (
-                    <div key={i} style={{ padding: "8px 10px", background: "rgba(124,58,237,0.03)", borderRadius: 10, borderLeft: "3px solid " + AEO_PURPLE }}>
-                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: "#1f2937", lineHeight: 1.5 }}>Q: {faq.question}</span>
-                        <FeedbackButton suggestionType="aeo_faq" suggestionText={faq.question} publication={publication} />
-                      </div>
-                      <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.6, marginTop: 4 }}>
-                        <span style={{ fontWeight: 600, color: "#6b7280" }}>A: </span>{faq.answer}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <button onClick={loadMoreFaqs} disabled={isMoreFaqsLoading} style={{
-                  marginTop: 8, width: "100%", padding: "6px 12px", fontSize: 11, fontWeight: 600,
-                  color: isMoreFaqsLoading ? "#9ca3af" : AEO_PURPLE,
-                  background: isMoreFaqsLoading ? "#f3f4f6" : "rgba(124,58,237,0.06)",
-                  border: "1px solid rgba(124,58,237,0.15)", borderRadius: 6,
-                  cursor: isMoreFaqsLoading ? "wait" : "pointer",
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6, transition: "all 150ms",
-                }}>
-                  {isMoreFaqsLoading ? <><LoadingBars size="xs" color={AEO_PURPLE} /> Generating...</> : "More FAQ suggestions"}
-                </button>
-              </div>
-            ) : null;
-          })()}
-
-          {aeoContentChanged && (
-            <div onClick={runDeepAnalysis} style={{
-              padding: "8px 12px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8,
-              display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer",
-            }}>
-              <span style={{ fontSize: 11, color: "#92400e" }}>Content has changed since this was generated.</span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: AEO_PURPLE, textDecoration: "underline" }}>Update</span>
-            </div>
-          )}
-        </div>
-      ) : null}
+      {/* AEO insights moved to dedicated AEO/GEO tab in V3 - this panel is keywords only */}
 
       {isVolumesLoading && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center", padding: "4px 0" }}>
           <LoadingBars size="xs" color={MJH_GOLD} />
-          <span style={{ fontSize: 10, color: "#9ca3af" }}>Checking search volumes...</span>
+          <span style={{ fontSize: 10, color: "#4b5563" }}>Checking search volumes...</span>
         </div>
       )}
 
       {isLoading && analysis && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center" }}>
           <LoadingBars size="xs" color="#9ca3af" />
-          <span style={{ fontSize: 10, color: "#9ca3af" }}>Updating insights...</span>
+          <span style={{ fontSize: 10, color: "#4b5563" }}>Updating insights...</span>
         </div>
       )}
     </div>

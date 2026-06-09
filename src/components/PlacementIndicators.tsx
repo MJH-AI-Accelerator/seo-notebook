@@ -35,9 +35,13 @@ function IndicatorDot({ letter, active, tooltip }: { letter: string; active: boo
         lineHeight: 1,
         cursor: "default",
         flexShrink: 0,
-        background: active ? "#16a34a" : "transparent",
-        color: active ? "#ffffff" : "#d1d5db",
-        border: active ? "none" : "1.5px solid #d1d5db",
+        // Inactive = a solid WHITE disc (was a near-invisible faint-grey ring on
+        // transparent) so each indicator reads clearly on the warm panel; a light
+        // edge + soft lift keep it defined even on a white card. Active = green.
+        background: active ? "#16a34a" : "#ffffff",
+        color: active ? "#ffffff" : "#94a3b8",
+        border: active ? "none" : "1.5px solid #cbd5e1",
+        boxShadow: active ? "none" : "0 1px 2px rgba(0,0,0,0.07)",
         transition: "all 150ms",
       }}
     >

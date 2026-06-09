@@ -19,7 +19,6 @@ const MJH_PUBLICATIONS = [
   "Urology Times",
   "Medical Economics",
   "Psychiatric Times",
-  "Contemporary Aesthetics",
 ];
 
 function useMediaQuery(query: string): boolean {

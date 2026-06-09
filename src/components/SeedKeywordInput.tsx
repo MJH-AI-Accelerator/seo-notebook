@@ -42,12 +42,14 @@ export function SeedKeywordInput({ seeds, onSeedsChange }: SeedKeywordInputProps
   return (
     <div style={{
       borderRadius: 14,
-      background: "#ffffff",
-      boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 0 0 1px rgba(0,0,0,0.03)",
+      background: "rgba(255,255,255,0.55)",
+      backdropFilter: "blur(16px) saturate(170%)",
+      WebkitBackdropFilter: "blur(16px) saturate(170%)",
+      boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.85), inset 1.5px 2px 1px -1px rgba(255,255,255,1), inset -2px -3px 2px -1px rgba(255,255,255,0.6), 0 2px 6px rgba(0,0,0,0.07), 0 10px 26px rgba(0,0,0,0.08)",
       padding: "12px 14px",
     }}>
-      <span style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", color: "#94a3b8", fontWeight: 600 }}>
-        Seed Keywords
+      <span style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", color: "#4b5563", fontWeight: 600 }}>
+        Desired Keywords
       </span>
 
       {seeds.length > 0 && (
@@ -68,9 +70,10 @@ export function SeedKeywordInput({ seeds, onSeedsChange }: SeedKeywordInputProps
               {seed}
               <button
                 onClick={() => handleRemove(seed)}
-                style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 12, color: "#8B7310", lineHeight: 1 }}
+                aria-label={`Remove ${seed}`}
+                style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 14, color: "#8B7310", lineHeight: 1 }}
               >
-                x
+                ×
               </button>
             </span>
           ))}
@@ -116,8 +119,8 @@ export function SeedKeywordInput({ seeds, onSeedsChange }: SeedKeywordInputProps
         >
           Add
         </button>
-        <div style={{ marginTop: 4, fontSize: 10, color: "#9ca3af" }}>
-          Tip: Long-tail keywords (2-3+ words) give better results than single broad terms
+        <div style={{ marginTop: 4, fontSize: 10, color: "#4b5563" }}>
+          Two- and three-word phrases give sharper results than single words.
         </div>
       </div>
     </div>
