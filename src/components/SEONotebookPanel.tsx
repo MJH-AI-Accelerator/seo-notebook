@@ -305,6 +305,7 @@ export function SEONotebookPanel({ text, documentFields, documentId }: SEONotebo
   const [popupMode, setPopupMode] = useState<"hidden" | "auto" | "persistent">("hidden");
   const [popupClosing, setPopupClosing] = useState(false);
   const onboardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onboardFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let onboarded = false;
@@ -316,10 +317,13 @@ export function SEONotebookPanel({ text, documentFields, documentId }: SEONotebo
       try { sessionStorage.setItem(onboardSessionKey, "1"); } catch {}
       onboardTimerRef.current = setTimeout(() => {
         setPopupClosing(true);
-        setTimeout(() => { setPopupMode("hidden"); setPopupClosing(false); }, 180);
+        onboardFadeRef.current = setTimeout(() => { setPopupMode("hidden"); setPopupClosing(false); }, 180);
       }, 5000);
     }
-    return () => { if (onboardTimerRef.current) clearTimeout(onboardTimerRef.current); };
+    return () => {
+      if (onboardTimerRef.current) clearTimeout(onboardTimerRef.current);
+      if (onboardFadeRef.current) clearTimeout(onboardFadeRef.current);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onboardKey, onboardSessionKey]);
 
@@ -329,13 +333,15 @@ export function SEONotebookPanel({ text, documentFields, documentId }: SEONotebo
 
   const dismissPopup = useCallback(() => {
     if (onboardTimerRef.current) clearTimeout(onboardTimerRef.current);
+    if (onboardFadeRef.current) clearTimeout(onboardFadeRef.current);
     markOnboarded();
     setPopupClosing(true);
-    setTimeout(() => { setPopupMode("hidden"); setPopupClosing(false); }, 180);
+    onboardFadeRef.current = setTimeout(() => { setPopupMode("hidden"); setPopupClosing(false); }, 180);
   }, [markOnboarded]);
 
   const openPopupPersistent = useCallback(() => {
     if (onboardTimerRef.current) clearTimeout(onboardTimerRef.current);
+    if (onboardFadeRef.current) clearTimeout(onboardFadeRef.current);
     markOnboarded();
     setPopupClosing(false);
     setPopupMode("persistent");
@@ -344,7 +350,8 @@ export function SEONotebookPanel({ text, documentFields, documentId }: SEONotebo
   const handleTabChange = useCallback((id: TabId) => {
     markOnboarded();
     if (onboardTimerRef.current) clearTimeout(onboardTimerRef.current);
-    setPopupMode((m) => (m === "hidden" ? m : "hidden"));
+    if (onboardFadeRef.current) clearTimeout(onboardFadeRef.current);
+    setPopupMode("hidden");
     setActiveTab(id);
   }, [markOnboarded]);
 

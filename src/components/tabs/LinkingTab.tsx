@@ -27,7 +27,7 @@ function buildLiveUrl(publication?: string, slug?: string): string | null {
   if (!slug) return null;
   const pub = (publication || "").trim().toLowerCase();
   if (!KNOWN_MJH_PUBLICATIONS.has(pub)) return null;
-  const cleanSlug = slug.replace(/^\/+/, "");
+  const cleanSlug = slug.replace(/^\/+/, "").split("/").map(encodeURIComponent).join("/");
   return `https://www.${pub}.com/view/${cleanSlug}`;
 }
 

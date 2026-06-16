@@ -79,7 +79,7 @@ function keywordCoverageNote(haystack: string, primaryKeyword?: string, secondar
     return `Your primary keyword "${primaryKeyword}" isn't included${secondaryKeyword ? ` (secondary keyword "${secondaryKeyword}" ${hasSecondary ? "is" : "isn't"}).` : "."}`;
   }
   if (secondaryKeyword && !hasSecondary) {
-    return `Your primary keyword "${primaryKeyword}" is included, but your secondary keyword "${secondaryKeyword}" is not. Work it in if it reads naturally.`;
+    return `Your secondary keyword "${secondaryKeyword}" isn't included${primaryKeyword && hasPrimary ? ` (primary keyword "${primaryKeyword}" is present)` : ""}. Work it in if it reads naturally.`;
   }
   return "";
 }

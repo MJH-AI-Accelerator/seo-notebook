@@ -440,7 +440,7 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
         category: "meta",
         severity: "opportunity",
         label: "Secondary keyword not in title",
-        description: `The title leads with the primary keyword but doesn't include "${secondaryKeyword}".`,
+        description: `The title doesn't include your secondary keyword "${secondaryKeyword}".`,
         howToFix: "If it fits naturally, include the secondary keyword in the title too - but never at the cost of the primary leading.",
         jumpTo: { tab: "meta", anchorId: "anchor-meta-title" },
       });
