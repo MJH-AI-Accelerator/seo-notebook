@@ -885,15 +885,18 @@ export function KeywordPanel({
   const activeTerm = candidates.find((c) => c.term === selectedPrimaryTerm) ? selectedPrimaryTerm : candidates[0]?.term ?? "";
 
   // Build the secondary keyword option pool: same candidates as primary + suggested supporting
-  // keywords (deduped). Gives the user a relevant set to pick from without extra API calls.
+  // keywords (deduped), with the active primary filtered out so editors can't pick the same keyword twice.
+  const activeTermLower = activeTerm.toLowerCase();
   const secondaryOptions: { term: string; volume: number | null }[] = [];
   const seenSecondary = new Set<string>();
   for (const c of candidates) {
     const key = c.term.toLowerCase();
+    if (key === activeTermLower) continue;
     if (!seenSecondary.has(key)) { seenSecondary.add(key); secondaryOptions.push({ term: c.term, volume: c.volume }); }
   }
   for (const kw of suggestedKeywords) {
     const key = kw.term.toLowerCase();
+    if (key === activeTermLower) continue;
     if (!seenSecondary.has(key)) { seenSecondary.add(key); secondaryOptions.push({ term: kw.term, volume: kw.volume }); }
   }
 

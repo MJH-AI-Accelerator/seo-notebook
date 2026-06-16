@@ -5,6 +5,7 @@ import { FeedbackButton } from "../FeedbackButton";
 import { ScoreDonut, ScoreDonutLegend } from "../ScoreDonut";
 import { MJH_BLUE } from "../styles";
 import type { SEOAnalysis, LinkingSuggestion } from "../../lib/types";
+import { KNOWN_MJH_PUBLICATIONS } from "../../lib/utils";
 
 interface LinkingTabProps {
   analysis: SEOAnalysis | null;
@@ -19,13 +20,13 @@ interface LinkingTabProps {
   publication?: string;
 }
 
-// Build a live URL from the publication name and the article slug.
-// Returns null when either piece is missing or the pub name contains characters
-// that would make the URL obviously wrong.
+// Build the public, reader-facing URL for a suggested article. Only constructed for
+// known MJH publications (verified via CDN probe to use www.{pub}.com/view/{slug}).
+// Returns null for unknown publications rather than risking a broken link.
 function buildLiveUrl(publication?: string, slug?: string): string | null {
   if (!slug) return null;
   const pub = (publication || "").trim().toLowerCase();
-  if (!/^[a-z0-9-]+$/.test(pub)) return null;
+  if (!KNOWN_MJH_PUBLICATIONS.has(pub)) return null;
   const cleanSlug = slug.replace(/^\/+/, "");
   return `https://www.${pub}.com/view/${cleanSlug}`;
 }

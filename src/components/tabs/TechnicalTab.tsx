@@ -5,6 +5,7 @@ import { LoadingBars } from "../LoadingBars";
 import { MJH_BLUE, MJH_GOLD } from "../styles";
 import type { DocumentFields, HeadingItem, LinkCheckResult, TechnicalAuditItem } from "../../lib/types";
 import { isShortFormContent } from "../../lib/summary";
+import { containsKeywordTokens, keywordLeadsSlug } from "../../lib/utils";
 
 interface TechnicalTabProps {
   text: string;
@@ -17,31 +18,6 @@ interface TechnicalTabProps {
   linkCheckError: string | null;
   hasRunLinkCheck: boolean;
   onCheckLinks: () => void;
-}
-
-// Token-based keyword match so "selinexor in myelofibrosis" still counts as containing
-// "selinexor myelofibrosis" (word order / connecting words don't matter).
-function containsKeywordTokens(haystack: string, needle?: string): boolean {
-  if (!needle) return true;
-  const tokens = needle.toLowerCase().split(/\s+/).filter((t) => t.length > 1);
-  if (tokens.length === 0) return true;
-  const lower = haystack.toLowerCase();
-  return tokens.every((t) => lower.includes(t));
-}
-
-// True when the primary keyword sits near the START of the slug. Editors get the
-// most SEO/CTR value when the keyword leads the URL (and it survives truncation).
-function keywordLeadsUrl(slug: string, primaryKeyword?: string): boolean {
-  if (!primaryKeyword) return true;
-  const slugWords = slug.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(/\s+/).filter(Boolean);
-  const tokens = primaryKeyword.toLowerCase().split(/\s+/).filter((t) => t.length > 1);
-  if (tokens.length === 0 || slugWords.length === 0) return true;
-  let earliest = Infinity;
-  for (const t of tokens) {
-    const idx = slugWords.findIndex((w) => w.includes(t));
-    if (idx >= 0) earliest = Math.min(earliest, idx);
-  }
-  return earliest <= 2; // within the first three slug words
 }
 
 // URL Slug audit. Deliberately vague and non-numeric: we never cite a character
@@ -59,7 +35,7 @@ function urlAudit(slug?: string, primaryKeyword?: string, secondaryKeyword?: str
   }
   const slugAsWords = slug.replace(/-/g, " ");
   const hasPrimary = primaryKeyword ? containsKeywordTokens(slugAsWords, primaryKeyword) : true;
-  const leads = primaryKeyword ? keywordLeadsUrl(slug, primaryKeyword) : true;
+  const leads = primaryKeyword ? keywordLeadsSlug(slug, primaryKeyword) : true;
   const hasSecondary = secondaryKeyword ? containsKeywordTokens(slugAsWords, secondaryKeyword) : true;
 
   if (primaryKeyword && !hasPrimary) {

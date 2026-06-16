@@ -25,26 +25,7 @@ interface BuildSummaryInput {
   secondaryKeyword?: string;
 }
 
-function tokensContain(haystack: string, needle?: string): boolean {
-  if (!needle) return true;
-  const tokens = needle.toLowerCase().split(/\s+/).filter((t) => t.length > 1);
-  if (tokens.length === 0) return true;
-  const lower = haystack.toLowerCase();
-  return tokens.every((t) => lower.includes(t));
-}
-
-// True when the primary keyword sits near the START of the slug (within first 3 words).
-function keywordLeadsSlug(slug: string, primaryKeyword: string): boolean {
-  const slugWords = slug.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(/\s+/).filter(Boolean);
-  const tokens = primaryKeyword.toLowerCase().split(/\s+/).filter((t) => t.length > 1);
-  if (tokens.length === 0 || slugWords.length === 0) return true;
-  let earliest = Infinity;
-  for (const t of tokens) {
-    const idx = slugWords.findIndex((w) => w.includes(t));
-    if (idx >= 0) earliest = Math.min(earliest, idx);
-  }
-  return earliest <= 2;
-}
+import { containsKeywordTokens, keywordLeadsSlug } from "./utils";
 
 // Conference previews, news briefs, recaps, and listicles are legitimately short.
 // Detect them so we don't nag "push past 1,500 words" on content that should be
@@ -91,7 +72,7 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
       jumpTo: { tab: "meta", anchorId: "anchor-meta-title" },
     });
   } else if (primaryKeyword) {
-    if (!tokensContain(title, primaryKeyword)) {
+    if (!containsKeywordTokens(title, primaryKeyword)) {
       items.push({
         id: "meta-title-no-keyword",
         category: "meta",
@@ -159,7 +140,7 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
         jumpTo: { tab: "meta", anchorId: "anchor-meta-description" },
       });
     }
-    if (primaryKeyword && !tokensContain(meta, primaryKeyword)) {
+    if (primaryKeyword && !containsKeywordTokens(meta, primaryKeyword)) {
       items.push({
         id: "meta-desc-no-keyword",
         category: "meta",
@@ -185,7 +166,7 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
       jumpTo: { tab: "technical", anchorId: "anchor-url-slug" },
     });
   } else {
-    if (primaryKeyword && !tokensContain(slug.replace(/-/g, " "), primaryKeyword)) {
+    if (primaryKeyword && !containsKeywordTokens(slug.replace(/-/g, " "), primaryKeyword)) {
       items.push({
         id: "meta-slug-no-keyword",
         category: "meta",
@@ -409,7 +390,7 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
     // Keywords haven't loaded - skip
   } else {
     // If primary is missing from body, flag it
-    if (text && !tokensContain(text, primaryKeyword)) {
+    if (text && !containsKeywordTokens(text, primaryKeyword)) {
       items.push({
         id: "keywords-primary-not-in-body",
         category: "keywords",
@@ -441,7 +422,7 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
 
   // ---------- KEYWORDS: secondary ----------
   if (secondaryKeyword) {
-    if (text && !tokensContain(text, secondaryKeyword)) {
+    if (text && !containsKeywordTokens(text, secondaryKeyword)) {
       items.push({
         id: "secondary-not-in-body",
         category: "keywords",
@@ -453,7 +434,7 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
       });
     }
     const titleVal = documentFields?.title;
-    if (titleVal && !tokensContain(titleVal, secondaryKeyword)) {
+    if (titleVal && !containsKeywordTokens(titleVal, secondaryKeyword)) {
       items.push({
         id: "secondary-not-in-title",
         category: "meta",
@@ -465,7 +446,7 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
       });
     }
     const metaVal = documentFields?.metaDescription;
-    if (metaVal && !tokensContain(metaVal, secondaryKeyword)) {
+    if (metaVal && !containsKeywordTokens(metaVal, secondaryKeyword)) {
       items.push({
         id: "secondary-not-in-meta",
         category: "meta",
@@ -477,7 +458,7 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
       });
     }
     const slugVal = documentFields?.slug;
-    if (slugVal && !tokensContain(slugVal.replace(/-/g, " "), secondaryKeyword)) {
+    if (slugVal && !containsKeywordTokens(slugVal.replace(/-/g, " "), secondaryKeyword)) {
       items.push({
         id: "secondary-not-in-url",
         category: "meta",

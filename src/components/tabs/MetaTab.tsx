@@ -2,22 +2,13 @@
 
 import { useMemo } from "react";
 import type { DocumentFields, TechnicalAuditItem } from "../../lib/types";
+import { containsKeywordTokens } from "../../lib/utils";
 
 interface MetaTabProps {
   documentFields?: DocumentFields;
   primaryKeyword?: string;
   secondaryKeyword?: string;
   isLoading?: boolean;
-}
-
-// Token-based keyword match so "selinexor in myelofibrosis" still counts as containing
-// the primary keyword "selinexor myelofibrosis" (word order / connecting words don't matter).
-function containsKeywordTokens(haystack: string, needle?: string): boolean {
-  if (!needle) return true;
-  const tokens = needle.toLowerCase().split(/\s+/).filter((t) => t.length > 1);
-  if (tokens.length === 0) return true;
-  const lower = haystack.toLowerCase();
-  return tokens.every((t) => lower.includes(t));
 }
 
 const cardStyle: React.CSSProperties = {
