@@ -29,6 +29,14 @@ export const INJECTED_CSS = `
   0%, 100% { opacity: 0.5; }
   50% { opacity: 1; }
 }
+@keyframes onboard-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes onboard-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(-6px) scale(0.97); }
+}
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }

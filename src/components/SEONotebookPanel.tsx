@@ -13,6 +13,7 @@ import { LinkingTab } from "./tabs/LinkingTab";
 import { MetaTab } from "./tabs/MetaTab";
 import { TechnicalTab } from "./tabs/TechnicalTab";
 import { INJECTED_CSS, MJH_GOLD, MJH_SLATE, PANEL_BG, CHAT_ZONE_BG, RECS_ZONE_BG } from "./styles";
+import { OnboardingInfoButton, OnboardingCard } from "./OnboardingPopup";
 import { fetchLinkingSuggestions, fetchContentSuggestions, checkLinks } from "../lib/api";
 import type { DocumentFields, TabId, LinkingSuggestion, SummaryItem, ContentSuggestions, LinkCheckResult } from "../lib/types";
 
@@ -55,6 +56,7 @@ export function SEONotebookPanel({ text, documentFields, documentId }: SEONotebo
     [seedCacheKey]
   );
   const [selectedPrimary, setSelectedPrimary] = useState<string | undefined>();
+  const [selectedSecondary, setSelectedSecondary] = useState<string>("");
   const keywordAnalysisState = useKeywordAnalysis(text, apiUrl, publication, seedKeywords, documentFields, selectedPrimary, documentId);
 
   // activeTab is intentionally NOT persisted - every fresh panel mount starts on
@@ -107,11 +109,15 @@ export function SEONotebookPanel({ text, documentFields, documentId }: SEONotebo
   }, [documentId]);
 
   const supportingKeywordsForLinking = useMemo(() => {
-    return (keywordAnalysisState.analysis?.supportingKeywords || [])
+    const base = (keywordAnalysisState.analysis?.supportingKeywords || [])
       .map((kw) => kw.term)
-      .filter(Boolean)
-      .slice(0, 5);
-  }, [keywordAnalysisState.analysis]);
+      .filter(Boolean);
+    // Prepend secondary keyword so the linking ranker scores it highly (deduped)
+    const all = selectedSecondary
+      ? [selectedSecondary, ...base.filter((t) => t.toLowerCase() !== selectedSecondary.toLowerCase())]
+      : base;
+    return all.slice(0, 5);
+  }, [keywordAnalysisState.analysis, selectedSecondary]);
 
   const refreshLinkingSuggestions = useCallback(async () => {
     if (!text || text.trim().length < 50) return;
@@ -291,6 +297,57 @@ export function SEONotebookPanel({ text, documentFields, documentId }: SEONotebo
     isLinkingLoading ||
     isLinkCheckLoading;
 
+  // Onboarding popup - shown once per publication, auto-dismisses after 5 s.
+  // Clicking the (i) button re-opens it in "persistent" mode (no auto-dismiss timer).
+  const onboardSite = publication || "default";
+  const onboardKey = `seo-copilot-onboarded-${onboardSite}`;
+  const onboardSessionKey = `seo-copilot-onboard-shown-${onboardSite}`;
+  const [popupMode, setPopupMode] = useState<"hidden" | "auto" | "persistent">("hidden");
+  const [popupClosing, setPopupClosing] = useState(false);
+  const onboardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    let onboarded = false;
+    let shownThisSession = false;
+    try { onboarded = localStorage.getItem(onboardKey) === "1"; } catch {}
+    try { shownThisSession = sessionStorage.getItem(onboardSessionKey) === "1"; } catch {}
+    if (!onboarded && !shownThisSession) {
+      setPopupMode("auto");
+      try { sessionStorage.setItem(onboardSessionKey, "1"); } catch {}
+      onboardTimerRef.current = setTimeout(() => {
+        setPopupClosing(true);
+        setTimeout(() => { setPopupMode("hidden"); setPopupClosing(false); }, 180);
+      }, 5000);
+    }
+    return () => { if (onboardTimerRef.current) clearTimeout(onboardTimerRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onboardKey, onboardSessionKey]);
+
+  const markOnboarded = useCallback(() => {
+    try { localStorage.setItem(onboardKey, "1"); } catch {}
+  }, [onboardKey]);
+
+  const dismissPopup = useCallback(() => {
+    if (onboardTimerRef.current) clearTimeout(onboardTimerRef.current);
+    markOnboarded();
+    setPopupClosing(true);
+    setTimeout(() => { setPopupMode("hidden"); setPopupClosing(false); }, 180);
+  }, [markOnboarded]);
+
+  const openPopupPersistent = useCallback(() => {
+    if (onboardTimerRef.current) clearTimeout(onboardTimerRef.current);
+    markOnboarded();
+    setPopupClosing(false);
+    setPopupMode("persistent");
+  }, [markOnboarded]);
+
+  const handleTabChange = useCallback((id: TabId) => {
+    markOnboarded();
+    if (onboardTimerRef.current) clearTimeout(onboardTimerRef.current);
+    setPopupMode((m) => (m === "hidden" ? m : "hidden"));
+    setActiveTab(id);
+  }, [markOnboarded]);
+
   const onGenerateAll = useCallback(() => {
     keywordAnalysisState.runDeepAnalysis();
     if (text && text.trim().length >= 100) loadContentSuggestions();
@@ -403,9 +460,14 @@ export function SEONotebookPanel({ text, documentFields, documentId }: SEONotebo
         // backgroundColor (longhand) so the sheen background-image in INJECTED_CSS isn't reset
         backgroundColor: PANEL_BG,
         fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
+        position: "relative",
       }}
     >
       <style dangerouslySetInnerHTML={{ __html: INJECTED_CSS }} />
+
+      {/* First-run onboarding popup. Auto-shown once per publication;
+          clicking the (i) button in the header re-opens in persistent mode. */}
+      {popupMode !== "hidden" && <OnboardingCard onDismiss={dismissPopup} closing={popupClosing} />}
 
       {/* Header */}
       <div
@@ -432,6 +494,7 @@ export function SEONotebookPanel({ text, documentFields, documentId }: SEONotebo
           {isLoading && (
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: MJH_GOLD, animation: "content-pulse 2s ease-in-out infinite" }} />
           )}
+          <OnboardingInfoButton onClick={openPopupPersistent} />
         </div>
         <div
           style={{
@@ -450,7 +513,7 @@ export function SEONotebookPanel({ text, documentFields, documentId }: SEONotebo
       </div>
 
       {/* Tab Bar */}
-      <TabBar tabs={tabDefs} activeTab={activeTab} onTabChange={setActiveTab} />
+      <TabBar tabs={tabDefs} activeTab={activeTab} onTabChange={handleTabChange} />
 
       {/* Universal AI disclaimer - one place, applies to every tab. */}
       <div
@@ -488,6 +551,8 @@ export function SEONotebookPanel({ text, documentFields, documentId }: SEONotebo
                 seedKeywords={seedKeywords}
                 onSeedsChange={setSeedKeywords}
                 onSelectPrimary={setSelectedPrimary}
+                secondaryKeyword={selectedSecondary}
+                onSelectSecondary={setSelectedSecondary}
                 documentFields={documentFields}
                 externalAnalysis={{
                   analysis: keywordAnalysisState.analysis,
@@ -509,6 +574,7 @@ export function SEONotebookPanel({ text, documentFields, documentId }: SEONotebo
                 deepAnalysis={keywordAnalysisState.deepAnalysis}
                 documentFields={documentFields}
                 primaryKeyword={effectivePrimary}
+                secondaryKeyword={selectedSecondary}
                 linkingSuggestions={linkingSuggestions}
                 linkCheckResults={linkCheckResults}
                 isAnyLoading={isAnyLoading}
@@ -545,12 +611,14 @@ export function SEONotebookPanel({ text, documentFields, documentId }: SEONotebo
               />
             </div>
             <div style={{ display: activeTab === "meta" ? "block" : "none" }}>
-              <MetaTab documentFields={documentFields} primaryKeyword={effectivePrimary} />
+              <MetaTab documentFields={documentFields} primaryKeyword={effectivePrimary} secondaryKeyword={selectedSecondary} />
             </div>
             <div style={{ display: activeTab === "technical" ? "block" : "none" }}>
               <TechnicalTab
                 text={text}
                 documentFields={documentFields}
+                primaryKeyword={effectivePrimary}
+                secondaryKeyword={selectedSecondary}
                 linkCheckResults={linkCheckResults}
                 isLinkCheckLoading={isLinkCheckLoading}
                 linkCheckError={linkCheckError}

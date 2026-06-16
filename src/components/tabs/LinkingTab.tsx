@@ -19,6 +19,48 @@ interface LinkingTabProps {
   publication?: string;
 }
 
+// Build a live URL from the publication name and the article slug.
+// Returns null when either piece is missing or the pub name contains characters
+// that would make the URL obviously wrong.
+function buildLiveUrl(publication?: string, slug?: string): string | null {
+  if (!slug) return null;
+  const pub = (publication || "").trim().toLowerCase();
+  if (!/^[a-z0-9-]+$/.test(pub)) return null;
+  const cleanSlug = slug.replace(/^\/+/, "");
+  return `https://www.${pub}.com/view/${cleanSlug}`;
+}
+
+// Clickable chip that opens a URL in a new tab.
+function LinkChip({ href, label, color }: { href: string; label: string; color: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        padding: "3px 9px",
+        borderRadius: 99,
+        fontSize: 10.5,
+        fontWeight: 700,
+        color,
+        background: "rgba(255,255,255,0.7)",
+        border: `1px solid ${color}33`,
+        textDecoration: "none",
+        lineHeight: 1.2,
+      }}
+    >
+      {label}
+      <svg width="9" height="9" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+        <path d="M12.5 2a.75.75 0 000 1.5h2.44l-6.97 6.97a.75.75 0 101.06 1.06L16 4.56V7a.75.75 0 001.5 0V2.75A.75.75 0 0016.75 2H12.5z" />
+        <path d="M4.75 4.5A2.75 2.75 0 002 7.25v8A2.75 2.75 0 004.75 18h8A2.75 2.75 0 0015.5 15.25v-3a.75.75 0 00-1.5 0v3c0 .69-.56 1.25-1.25 1.25h-8c-.69 0-1.25-.56-1.25-1.25v-8c0-.69.56-1.25 1.25-1.25h3a.75.75 0 000-1.5h-3z" />
+      </svg>
+    </a>
+  );
+}
+
 const cardStyle: React.CSSProperties = {
   borderRadius: 14,
   background: "rgba(255,255,255,0.55)",
@@ -296,6 +338,15 @@ export function LinkingTab({
                   <div style={{ fontSize: 10, color: "#4b5563", fontFamily: "ui-monospace, SFMono-Regular, monospace", marginBottom: 6 }}>
                     /{s.slug}
                   </div>
+                  {(() => {
+                    const liveUrl = buildLiveUrl(publication, s.slug);
+                    if (!liveUrl) return null;
+                    return (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 6 }}>
+                        <LinkChip href={liveUrl} label="Live site" color="#4b5563" />
+                      </div>
+                    );
+                  })()}
                   {s.relevanceReason && (
                     <div style={{ fontSize: 11, color: "#1f2937", marginBottom: 6, lineHeight: 1.45 }}>
                       <span style={{ fontWeight: 700, color: "#4b5563" }}>Why it fits:</span>{" "}

@@ -25,6 +25,7 @@ interface SummaryTabProps {
   linkCheckResults?: LinkCheckResult[];
   // Editor's SELECTED primary keyword - score uses it so it updates instantly.
   primaryKeyword?: string;
+  secondaryKeyword?: string;
   isAnyLoading: boolean;
   onGenerateAll: () => void;
   onItemClick: (item: SummaryItem) => void;
@@ -240,6 +241,7 @@ export function SummaryTab({
   linkingSuggestions,
   linkCheckResults,
   primaryKeyword,
+  secondaryKeyword,
   isAnyLoading,
   onGenerateAll,
   onItemClick,
@@ -265,8 +267,10 @@ export function SummaryTab({
         linkingSuggestions,
         linkCheckResults,
         text,
+        primaryKeyword,
+        secondaryKeyword,
       }),
-    [analysis, deepAnalysis, documentFields, score, linkingSuggestions, linkCheckResults, text]
+    [analysis, deepAnalysis, documentFields, score, linkingSuggestions, linkCheckResults, text, primaryKeyword, secondaryKeyword]
   );
 
   const [filter, setFilter] = useState<FilterKey>("all");

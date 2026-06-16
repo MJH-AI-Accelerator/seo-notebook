@@ -1,11 +1,23 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { DocumentFields, TechnicalAuditItem } from "../../lib/types";
 
 interface MetaTabProps {
   documentFields?: DocumentFields;
   primaryKeyword?: string;
+  secondaryKeyword?: string;
+  isLoading?: boolean;
+}
+
+// Token-based keyword match so "selinexor in myelofibrosis" still counts as containing
+// the primary keyword "selinexor myelofibrosis" (word order / connecting words don't matter).
+function containsKeywordTokens(haystack: string, needle?: string): boolean {
+  if (!needle) return true;
+  const tokens = needle.toLowerCase().split(/\s+/).filter((t) => t.length > 1);
+  if (tokens.length === 0) return true;
+  const lower = haystack.toLowerCase();
+  return tokens.every((t) => lower.includes(t));
 }
 
 const cardStyle: React.CSSProperties = {
@@ -58,22 +70,69 @@ function AuditCard({ label, value, status, recommendation, anchorId, footer }: {
         </div>
       )}
       {/* Optional extra content inside the card box (e.g. the 301 redirect caution
-          under URL Slug) - same box, no connector. */}
+          under URL Slug in TechnicalTab) - same box, no connector. */}
       {footer}
     </div>
   );
 }
 
-function metaDescriptionAudit(meta?: string, primaryKeyword?: string): TechnicalAuditItem {
+// Builds the "primary X included, secondary Y not" clause shared across audits.
+// Returns "" when there's nothing to flag (both present, or none set).
+function keywordCoverageNote(haystack: string, primaryKeyword?: string, secondaryKeyword?: string): string {
+  const hasPrimary = primaryKeyword ? containsKeywordTokens(haystack, primaryKeyword) : true;
+  const hasSecondary = secondaryKeyword ? containsKeywordTokens(haystack, secondaryKeyword) : true;
+  if (primaryKeyword && !hasPrimary && secondaryKeyword && !hasSecondary) {
+    return `Neither your primary keyword "${primaryKeyword}" nor your secondary keyword "${secondaryKeyword}" appears here.`;
+  }
+  if (primaryKeyword && !hasPrimary) {
+    return `Your primary keyword "${primaryKeyword}" isn't included${secondaryKeyword ? ` (secondary keyword "${secondaryKeyword}" ${hasSecondary ? "is" : "isn't"}).` : "."}`;
+  }
+  if (secondaryKeyword && !hasSecondary) {
+    return `Your primary keyword "${primaryKeyword}" is included, but your secondary keyword "${secondaryKeyword}" is not. Work it in if it reads naturally.`;
+  }
+  return "";
+}
+
+function metaDescriptionAudit(meta?: string, primaryKeyword?: string, secondaryKeyword?: string): TechnicalAuditItem {
   if (!meta) {
-    return { label: "Meta Description", value: "Missing", status: "error", recommendation: "Add a 120-160 character meta description that includes your primary keyword." };
+    return {
+      label: "Meta Description",
+      value: "Missing",
+      status: "error",
+      recommendation: `Add a 120-160 character meta description that includes your primary keyword${secondaryKeyword ? " (and your secondary keyword if it fits)" : ""}.`,
+    };
   }
   const len = meta.length;
-  const lacksKeyword = primaryKeyword && !meta.toLowerCase().includes(primaryKeyword.toLowerCase());
-  if (len < 120) return { label: "Meta Description", value: `${meta} (${len} chars)`, status: "warning", recommendation: `Too short - aim for 120-160 characters.${lacksKeyword ? ` Also missing primary keyword "${primaryKeyword}".` : ""}` };
-  if (len > 160) return { label: "Meta Description", value: `${meta} (${len} chars)`, status: "warning", recommendation: `Too long - Google may truncate beyond 160 characters.${lacksKeyword ? ` Also missing primary keyword "${primaryKeyword}".` : ""}` };
-  if (lacksKeyword) return { label: "Meta Description", value: `${meta} (${len} chars)`, status: "warning", recommendation: `Length is good but primary keyword "${primaryKeyword}" is not included.` };
-  return { label: "Meta Description", value: `${meta} (${len} chars)`, status: "good" };
+  const kwNote = keywordCoverageNote(meta, primaryKeyword, secondaryKeyword);
+  if (len < 120) {
+    return {
+      label: "Meta Description",
+      value: `${meta} (${len} chars)`,
+      status: "warning",
+      recommendation: `A little short - aim for 120-160 characters.${kwNote ? ` ${kwNote}` : ""}`,
+    };
+  }
+  if (len > 160) {
+    return {
+      label: "Meta Description",
+      value: `${meta} (${len} chars)`,
+      status: "warning",
+      recommendation: `Over 160 characters - Google may shorten it in search, so trim it a little.${kwNote ? ` ${kwNote}` : ""}`,
+    };
+  }
+  if (kwNote) {
+    return {
+      label: "Meta Description",
+      value: `${meta} (${len} chars)`,
+      status: "warning",
+      recommendation: `Length is good. ${kwNote}`,
+    };
+  }
+  return {
+    label: "Meta Description",
+    value: `${meta} (${len} chars)`,
+    status: "good",
+  };
 }
 
 // Locate the first occurrence of any token in the primary keyword within the title.
@@ -120,101 +179,33 @@ function titleAudit(title?: string, primaryKeyword?: string): TechnicalAuditItem
   return { label: "Title Tag", value: `${title} (${len} chars)`, status: "good" };
 }
 
-// Caution block that lives INSIDE the URL Slug card (same box - no connector). A
-// slug change on an indexed page without a 301 redirect silently drops search
-// rankings to zero and breaks every external link to the old URL - but it's a
-// warning (avoidable), not an error, so it's styled amber. It echoes the card's
-// own recommendation-block pattern (amber left rail + tint) with a divider above
-// it, so it reads as a distinct caution that's clearly part of the slug card. The
-// headline is always visible; the "why / how" detail tucks behind Learn more.
-function SlugRedirectNotice() {
-  const [expanded, setExpanded] = useState(false);
-  return (
-    <div
-      style={{
-        marginTop: 10,
-        paddingTop: 10,
-        borderTop: "1px solid rgba(0,0,0,0.07)",
-      }}
-    >
-      <div
-        style={{
-          padding: "8px 10px",
-          background: "rgba(245,158,11,0.08)",
-          borderLeft: "2px solid #f59e0b",
-          borderRadius: 6,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-          <svg width="12" height="12" viewBox="0 0 20 20" fill="#f59e0b" aria-hidden="true">
-            <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-          </svg>
-          <span style={{ fontSize: 10.5, fontWeight: 700, color: "#b45309", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-            Changing a URL?
-          </span>
-        </div>
-        <div style={{ fontSize: 11, color: "#1f2937", lineHeight: 1.55 }}>
-          If the page has been published and indexed, you MUST add a 301 redirect from the old slug to the new one before changing it. For a brand-new page that's never been published, no redirect needed.
-        </div>
-        <button
-          onClick={() => setExpanded((v) => !v)}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 3,
-            marginTop: 6,
-            padding: 0,
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            fontSize: 10.5,
-            fontWeight: 700,
-            color: "#b45309",
-            fontFamily: "inherit",
-          }}
-        >
-          {expanded ? "Show less" : "Learn more"}
-          <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor" style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 150ms" }}>
-            <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-          </svg>
-        </button>
-        {expanded && (
-          <ul style={{ margin: "6px 0 0", paddingLeft: 16, fontSize: 11, color: "#1f2937", lineHeight: 1.55 }}>
-            <li>Without the 301, the page loses every search ranking and every external link to it breaks.</li>
-            <li>A 301 preserves the rankings and link equity built up on the old URL.</li>
-            <li>Set this up using vanity redirects in Sanity.</li>
-          </ul>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function urlAudit(slug?: string, primaryKeyword?: string): TechnicalAuditItem {
-  if (!slug) return { label: "URL Slug", value: "Missing", status: "error", recommendation: "Add a clean, hyphenated URL slug containing your primary keyword." };
-  const issues: string[] = [];
-  if (slug.length > 75) issues.push("too long (over 75 chars)");
-  if (/[A-Z]/.test(slug)) issues.push("contains uppercase letters");
-  if (/_/.test(slug)) issues.push("uses underscores instead of hyphens");
-  if (/[^a-zA-Z0-9-/]/.test(slug.replace(/^\//, ""))) issues.push("contains special characters");
-  if (primaryKeyword && !slug.toLowerCase().includes(primaryKeyword.toLowerCase().replace(/\s+/g, "-"))) {
-    issues.push(`missing primary keyword "${primaryKeyword}"`);
-  }
-  if (issues.length === 0) return { label: "URL Slug", value: `/${slug}`, status: "good" };
-  return { label: "URL Slug", value: `/${slug}`, status: "warning", recommendation: `Issues: ${issues.join(", ")}.` };
-}
-
-export function MetaTab({ documentFields, primaryKeyword }: MetaTabProps) {
+export function MetaTab({ documentFields, primaryKeyword, secondaryKeyword, isLoading }: MetaTabProps) {
   const audits = useMemo<TechnicalAuditItem[]>(() => {
-    return [
-      titleAudit(documentFields?.title, primaryKeyword),
-      metaDescriptionAudit(documentFields?.metaDescription, primaryKeyword),
-      urlAudit(documentFields?.slug, primaryKeyword),
-    ];
-  }, [documentFields, primaryKeyword]);
+    const list: TechnicalAuditItem[] = [];
+    list.push(titleAudit(documentFields?.title, primaryKeyword));
+    list.push(metaDescriptionAudit(documentFields?.metaDescription, primaryKeyword, secondaryKeyword));
+    // URL Slug audit moved to the Other Recs tab.
+    return list;
+  }, [documentFields, primaryKeyword, secondaryKeyword]);
 
   // Anchor IDs let the Summary tab deep-link straight to a specific audit card.
-  const auditAnchors = ["anchor-meta-title", "anchor-meta-description", "anchor-url-slug"];
+  const auditAnchors = ["anchor-meta-title", "anchor-meta-description"];
+
+  // Show a loading placeholder while document fields are being read, so we don't
+  // flash "Missing" cards based on the previous doc / no doc.
+  const hasAnyField =
+    !!documentFields &&
+    (documentFields.title !== undefined ||
+      documentFields.metaDescription !== undefined ||
+      documentFields.slug !== undefined);
+  if (isLoading && !hasAnyField) {
+    return (
+      <div style={{ padding: 24, textAlign: "center" }}>
+        <div style={{ fontSize: 13, color: "#4b5563", fontWeight: 500 }}>Reading document fields...</div>
+        <div style={{ fontSize: 11, color: "#4b5563", marginTop: 4 }}>Audit will run once content loads</div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -232,8 +223,6 @@ export function MetaTab({ documentFields, primaryKeyword }: MetaTabProps) {
           value={a.value}
           status={a.status}
           recommendation={a.recommendation}
-          // 301-redirect caution lives INSIDE the URL Slug card (same box, no connector).
-          footer={a.label === "URL Slug" ? <SlugRedirectNotice /> : undefined}
         />
       ))}
     </div>

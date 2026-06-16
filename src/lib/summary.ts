@@ -20,6 +20,9 @@ interface BuildSummaryInput {
   // Set after the editor has run the broken-link checker on the Other Recs tab.
   linkCheckResults?: LinkCheckResult[];
   text: string;
+  // Editor's selected keywords - override analysis defaults when set.
+  primaryKeyword?: string;
+  secondaryKeyword?: string;
 }
 
 function tokensContain(haystack: string, needle?: string): boolean {
@@ -28,6 +31,19 @@ function tokensContain(haystack: string, needle?: string): boolean {
   if (tokens.length === 0) return true;
   const lower = haystack.toLowerCase();
   return tokens.every((t) => lower.includes(t));
+}
+
+// True when the primary keyword sits near the START of the slug (within first 3 words).
+function keywordLeadsSlug(slug: string, primaryKeyword: string): boolean {
+  const slugWords = slug.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(/\s+/).filter(Boolean);
+  const tokens = primaryKeyword.toLowerCase().split(/\s+/).filter((t) => t.length > 1);
+  if (tokens.length === 0 || slugWords.length === 0) return true;
+  let earliest = Infinity;
+  for (const t of tokens) {
+    const idx = slugWords.findIndex((w) => w.includes(t));
+    if (idx >= 0) earliest = Math.min(earliest, idx);
+  }
+  return earliest <= 2;
 }
 
 // Conference previews, news briefs, recaps, and listicles are legitimately short.
@@ -55,7 +71,8 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
   // contentScore is in BuildSummaryInput for forward-compat but is now shown
   // directly on the Summary tab as a card with breakdown - no echo item needed here.
   const { analysis, deepAnalysis, documentFields, linkingSuggestions, linkCheckResults, text } = input;
-  const primaryKeyword = analysis?.primaryKeyword?.term;
+  const primaryKeyword = input.primaryKeyword || analysis?.primaryKeyword?.term;
+  const secondaryKeyword = input.secondaryKeyword || "";
 
   // ---------- META: title ----------
   // Length warnings removed - the article title IS the page title and editors
@@ -155,7 +172,7 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
     }
   }
 
-  // ---------- META: slug ----------
+  // ---------- META: slug (audit lives in Other Recs tab) ----------
   const slug = documentFields?.slug;
   if (!slug) {
     items.push({
@@ -164,21 +181,10 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
       severity: "error",
       label: "URL slug missing",
       description: "No URL slug set.",
-      howToFix: "Add a clean, hyphenated slug 3-5 words long that contains the primary keyword.",
-      jumpTo: { tab: "meta", anchorId: "anchor-url-slug" },
+      howToFix: "Add a short, descriptive slug that leads with your primary keyword.",
+      jumpTo: { tab: "technical", anchorId: "anchor-url-slug" },
     });
   } else {
-    if (slug.length > 60) {
-      items.push({
-        id: "meta-slug-long",
-        category: "meta",
-        severity: "warning",
-        label: "URL slug is long",
-        description: `Slug is ${slug.length} characters. 3-5 words is the sweet spot.`,
-        howToFix: "Shorten the slug to keep the URL clean and scannable.",
-        jumpTo: { tab: "meta", anchorId: "anchor-url-slug" },
-      });
-    }
     if (primaryKeyword && !tokensContain(slug.replace(/-/g, " "), primaryKeyword)) {
       items.push({
         id: "meta-slug-no-keyword",
@@ -186,8 +192,18 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
         severity: "opportunity",
         label: "Primary keyword not in URL",
         description: `Slug doesn't contain "${primaryKeyword}".`,
-        howToFix: "Rework the slug to include the primary keyword (hyphenated). URLs with keywords still get a modest ranking lift.",
-        jumpTo: { tab: "meta", anchorId: "anchor-url-slug" },
+        howToFix: "Work your primary keyword into the URL, ideally at the start - if the address gets shortened, a leading keyword still shows.",
+        jumpTo: { tab: "technical", anchorId: "anchor-url-slug" },
+      });
+    } else if (primaryKeyword && !keywordLeadsSlug(slug, primaryKeyword)) {
+      items.push({
+        id: "meta-slug-keyword-late",
+        category: "meta",
+        severity: "opportunity",
+        label: "Primary keyword late in URL",
+        description: `"${primaryKeyword}" is in the URL but not near the start.`,
+        howToFix: "Lead the URL with the primary keyword so it stays visible if the address gets shortened.",
+        jumpTo: { tab: "technical", anchorId: "anchor-url-slug" },
       });
     }
   }
@@ -419,6 +435,57 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
         description: `"${primaryKeyword}" shows no measurable monthly searches, so even ranking #1 brings little traffic.`,
         howToFix: "Pick a primary people actually search for - check your supporting keywords for higher-volume options, or set a new primary on the Keywords tab.",
         jumpTo: { tab: "keywords" },
+      });
+    }
+  }
+
+  // ---------- KEYWORDS: secondary ----------
+  if (secondaryKeyword) {
+    if (text && !tokensContain(text, secondaryKeyword)) {
+      items.push({
+        id: "secondary-not-in-body",
+        category: "keywords",
+        severity: "opportunity",
+        label: "Secondary keyword not in body",
+        description: `Your secondary keyword "${secondaryKeyword}" doesn't appear in the article body.`,
+        howToFix: "Work the secondary keyword into a body paragraph or two where it reads naturally.",
+        jumpTo: { tab: "keywords" },
+      });
+    }
+    const titleVal = documentFields?.title;
+    if (titleVal && !tokensContain(titleVal, secondaryKeyword)) {
+      items.push({
+        id: "secondary-not-in-title",
+        category: "meta",
+        severity: "opportunity",
+        label: "Secondary keyword not in title",
+        description: `The title leads with the primary keyword but doesn't include "${secondaryKeyword}".`,
+        howToFix: "If it fits naturally, include the secondary keyword in the title too - but never at the cost of the primary leading.",
+        jumpTo: { tab: "meta", anchorId: "anchor-meta-title" },
+      });
+    }
+    const metaVal = documentFields?.metaDescription;
+    if (metaVal && !tokensContain(metaVal, secondaryKeyword)) {
+      items.push({
+        id: "secondary-not-in-meta",
+        category: "meta",
+        severity: "opportunity",
+        label: "Secondary keyword not in meta description",
+        description: `The meta description doesn't include "${secondaryKeyword}".`,
+        howToFix: "Add the secondary keyword to the meta description if it reads naturally.",
+        jumpTo: { tab: "meta", anchorId: "anchor-meta-description" },
+      });
+    }
+    const slugVal = documentFields?.slug;
+    if (slugVal && !tokensContain(slugVal.replace(/-/g, " "), secondaryKeyword)) {
+      items.push({
+        id: "secondary-not-in-url",
+        category: "meta",
+        severity: "opportunity",
+        label: "Secondary keyword not in URL",
+        description: `The URL doesn't include "${secondaryKeyword}".`,
+        howToFix: "Optionally include the secondary keyword in the URL after the primary - only if the slug stays short and clean.",
+        jumpTo: { tab: "technical", anchorId: "anchor-url-slug" },
       });
     }
   }

@@ -15,6 +15,10 @@ interface KeywordPanelProps {
   seedKeywords?: string[];
   onSeedsChange?: (seeds: string[]) => void;
   onSelectPrimary?: (term: string) => void;
+  // Optional secondary/supporting target keyword. Audits check the article against
+  // BOTH the primary and this secondary keyword. "" / undefined = none selected.
+  secondaryKeyword?: string;
+  onSelectSecondary?: (term: string) => void;
   documentFields?: DocumentFields;
   externalAnalysis?: {
     analysis: import("../lib/types").SEOAnalysis | null;
@@ -323,6 +327,128 @@ function PrimaryKeywordSelector({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function SecondaryKeywordSelector({
+  options,
+  selectedTerm,
+  onSelect,
+}: {
+  options: { term: string; volume: number | null }[];
+  selectedTerm: string;
+  onSelect: (term: string) => void;
+}) {
+  const [customInputOpen, setCustomInputOpen] = useState(false);
+  const [customValue, setCustomValue] = useState("");
+
+  const handleCustomSubmit = () => {
+    const trimmed = customValue.trim();
+    if (trimmed) {
+      onSelect(trimmed);
+      setCustomValue("");
+      setCustomInputOpen(false);
+    }
+  };
+
+  // The selected secondary may be a custom term not present in `options` - append it
+  // so the radio still shows as selected.
+  const opts = selectedTerm && !options.some((o) => o.term === selectedTerm)
+    ? [...options, { term: selectedTerm, volume: null }]
+    : options;
+
+  return (
+    <div style={cardStyle}>
+      <SectionHeader
+        label="Secondary Keyword"
+        iconColor={MJH_BLUE}
+        actionButton={
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: "#9ca3af" }}>Optional</span>
+            <PencilButton onClick={() => setCustomInputOpen(!customInputOpen)} active={customInputOpen} />
+          </div>
+        }
+      />
+
+      <div style={{ fontSize: 11, color: "#4b5563", lineHeight: 1.5, marginBottom: 8 }}>
+        Pick one more keyword to optimize for. Copilot then checks your title, meta, URL, headings, and images against both keywords.
+      </div>
+
+      {customInputOpen && (
+        <div style={{ marginBottom: 8, display: "flex", gap: 6 }}>
+          <input
+            type="text"
+            value={customValue}
+            onChange={(e) => setCustomValue(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleCustomSubmit(); }}
+            placeholder="Type a custom secondary keyword"
+            autoFocus
+            style={{ flex: 1, padding: "5px 8px", fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb", outline: "none", fontFamily: "inherit" }}
+          />
+          <button
+            onClick={handleCustomSubmit}
+            disabled={!customValue.trim()}
+            style={{
+              padding: "5px 10px", fontSize: 11, fontWeight: 600, borderRadius: 6, border: "none",
+              background: customValue.trim() ? MJH_BLUE : "#e5e7eb",
+              color: customValue.trim() ? "#ffffff" : "#9ca3af",
+              cursor: customValue.trim() ? "pointer" : "not-allowed",
+            }}
+          >
+            Set
+          </button>
+        </div>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {/* None option - secondary is optional */}
+        <SecondaryOptionRow term="" label="None" selected={!selectedTerm} onSelect={() => onSelect("")} />
+        {opts.map((o) => (
+          <SecondaryOptionRow
+            key={o.term}
+            term={o.term}
+            label={o.term}
+            volume={o.volume}
+            selected={o.term === selectedTerm}
+            onSelect={() => onSelect(o.term)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SecondaryOptionRow({ term, label, volume, selected, onSelect }: { term: string; label: string; volume?: number | null; selected: boolean; onSelect: () => void }) {
+  return (
+    <div
+      onClick={onSelect}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "6px 8px",
+        borderRadius: 8,
+        cursor: "pointer",
+        background: selected ? "rgba(0,93,172,0.06)" : "transparent",
+        border: selected ? "1px solid rgba(0,93,172,0.2)" : "1px solid transparent",
+        transition: "all 150ms",
+      }}
+    >
+      <div style={{
+        width: 14, height: 14, borderRadius: "50%",
+        border: selected ? "none" : "2px solid #d1d5db",
+        background: selected ? MJH_BLUE : "transparent",
+        flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        {selected && <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#ffffff" }} />}
+      </div>
+      <span style={{ fontSize: 12, fontWeight: selected ? 600 : 400, color: term ? (selected ? "#00468a" : "#374151") : "#6b7280", flex: 1, minWidth: 0 }}>
+        {label}
+      </span>
+      {volume != null && (
+        <span style={{ fontSize: 11, fontWeight: 600, color: "#1f2937" }}>{volume === 0 ? "N/A" : `${abbrevVol(volume)}/mo`}</span>
+      )}
     </div>
   );
 }
@@ -671,7 +797,9 @@ function SuggestedKeywordsCard({
 
 
 export function KeywordPanel({
-  text, publication, seedKeywords = [], onSeedsChange, onSelectPrimary, documentFields, externalAnalysis,
+  text, publication, seedKeywords = [], onSeedsChange, onSelectPrimary,
+  secondaryKeyword, onSelectSecondary,
+  documentFields, externalAnalysis,
 }: KeywordPanelProps) {
   const { apiUrl } = useConfig();
   // Destructure with safe defaults so hooks are always called (Rules of Hooks compliance)
@@ -756,14 +884,43 @@ export function KeywordPanel({
 
   const activeTerm = candidates.find((c) => c.term === selectedPrimaryTerm) ? selectedPrimaryTerm : candidates[0]?.term ?? "";
 
+  // Build the secondary keyword option pool: same candidates as primary + suggested supporting
+  // keywords (deduped). Gives the user a relevant set to pick from without extra API calls.
+  const secondaryOptions: { term: string; volume: number | null }[] = [];
+  const seenSecondary = new Set<string>();
+  for (const c of candidates) {
+    const key = c.term.toLowerCase();
+    if (!seenSecondary.has(key)) { seenSecondary.add(key); secondaryOptions.push({ term: c.term, volume: c.volume }); }
+  }
+  for (const kw of suggestedKeywords) {
+    const key = kw.term.toLowerCase();
+    if (!seenSecondary.has(key)) { seenSecondary.add(key); secondaryOptions.push({ term: kw.term, volume: kw.volume }); }
+  }
+
   return (
     <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 12 }}>
+      {/* On-page instructions: the two-keyword target process */}
+      <div style={{ ...cardStyle, padding: "11px 13px", background: "rgba(0,93,172,0.05)", boxShadow: "inset 0 0 0 1px rgba(0,93,172,0.12)" }}>
+        <div style={{ fontSize: 11.5, color: "#1f2937", lineHeight: 1.55 }}>
+          <strong style={{ color: "#00468a" }}>Choose your target keywords.</strong> Pick one <strong>Primary</strong> keyword (required) and, optionally, one <strong>Secondary</strong> keyword. Copilot optimizes the whole article - title, meta, URL, headings, and images - toward both.
+        </div>
+      </div>
+
       {onSeedsChange && <SeedKeywordInput seeds={seedKeywords} onSeedsChange={onSeedsChange} />}
 
       <PrimaryKeywordSelector
         candidates={candidates} selectedTerm={activeTerm}
         onSelect={(term: string) => { setSelectedPrimaryTerm(term); onSelectPrimary?.(term); }}
       />
+
+      {/* Secondary Keyword Selector (optional) */}
+      {onSelectSecondary && secondaryOptions.length > 0 && (
+        <SecondaryKeywordSelector
+          options={secondaryOptions}
+          selectedTerm={secondaryKeyword || ""}
+          onSelect={(term: string) => onSelectSecondary(term)}
+        />
+      )}
 
       {suggestedKeywords.length > 0 && (
         <SuggestedKeywordsCard

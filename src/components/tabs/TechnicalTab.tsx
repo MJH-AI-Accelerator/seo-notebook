@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { LoadingBars } from "../LoadingBars";
 import { MJH_BLUE, MJH_GOLD } from "../styles";
 import type { DocumentFields, HeadingItem, LinkCheckResult, TechnicalAuditItem } from "../../lib/types";
@@ -9,12 +9,118 @@ import { isShortFormContent } from "../../lib/summary";
 interface TechnicalTabProps {
   text: string;
   documentFields?: DocumentFields;
+  primaryKeyword?: string;
+  secondaryKeyword?: string;
   isLoading?: boolean;
   linkCheckResults: LinkCheckResult[];
   isLinkCheckLoading: boolean;
   linkCheckError: string | null;
   hasRunLinkCheck: boolean;
   onCheckLinks: () => void;
+}
+
+// Token-based keyword match so "selinexor in myelofibrosis" still counts as containing
+// "selinexor myelofibrosis" (word order / connecting words don't matter).
+function containsKeywordTokens(haystack: string, needle?: string): boolean {
+  if (!needle) return true;
+  const tokens = needle.toLowerCase().split(/\s+/).filter((t) => t.length > 1);
+  if (tokens.length === 0) return true;
+  const lower = haystack.toLowerCase();
+  return tokens.every((t) => lower.includes(t));
+}
+
+// True when the primary keyword sits near the START of the slug. Editors get the
+// most SEO/CTR value when the keyword leads the URL (and it survives truncation).
+function keywordLeadsUrl(slug: string, primaryKeyword?: string): boolean {
+  if (!primaryKeyword) return true;
+  const slugWords = slug.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(/\s+/).filter(Boolean);
+  const tokens = primaryKeyword.toLowerCase().split(/\s+/).filter((t) => t.length > 1);
+  if (tokens.length === 0 || slugWords.length === 0) return true;
+  let earliest = Infinity;
+  for (const t of tokens) {
+    const idx = slugWords.findIndex((w) => w.includes(t));
+    if (idx >= 0) earliest = Math.min(earliest, idx);
+  }
+  return earliest <= 2; // within the first three slug words
+}
+
+// URL Slug audit. Deliberately vague and non-numeric: we never cite a character
+// count or say "too long" - just scan for the primary keyword (ideally leading
+// the URL) and nudge toward short, descriptive slugs.
+function urlAudit(slug?: string, primaryKeyword?: string, secondaryKeyword?: string): TechnicalAuditItem {
+  const SHORT_DESC = "Keep the URL short and descriptive - concise URLs are easier to read - and avoid trailing, duplicate, or excessive spaces.";
+  if (!slug) {
+    return {
+      label: "URL Slug",
+      value: "Missing",
+      status: "warning",
+      recommendation: `Add a URL slug that leads with your primary keyword. ${SHORT_DESC}`,
+    };
+  }
+  const slugAsWords = slug.replace(/-/g, " ");
+  const hasPrimary = primaryKeyword ? containsKeywordTokens(slugAsWords, primaryKeyword) : true;
+  const leads = primaryKeyword ? keywordLeadsUrl(slug, primaryKeyword) : true;
+  const hasSecondary = secondaryKeyword ? containsKeywordTokens(slugAsWords, secondaryKeyword) : true;
+
+  if (primaryKeyword && !hasPrimary) {
+    const secNote = secondaryKeyword && !hasSecondary ? ` Your secondary keyword "${secondaryKeyword}" could follow it.` : "";
+    return {
+      label: "URL Slug",
+      value: `/${slug}`,
+      status: "warning",
+      recommendation: `Work your primary keyword "${primaryKeyword}" into the URL, ideally at the start - if the address gets shortened, a leading keyword still shows.${secNote} ${SHORT_DESC}`,
+    };
+  }
+  if (primaryKeyword && hasPrimary && !leads) {
+    return {
+      label: "URL Slug",
+      value: `/${slug}`,
+      status: "warning",
+      recommendation: `Your primary keyword is in the URL but not at the start. Leading with it reads better and holds up if the address gets shortened. ${SHORT_DESC}`,
+    };
+  }
+  // Primary leads (or no primary set). Clean pass.
+  return { label: "URL Slug", value: `/${slug}`, status: "good" };
+}
+
+// Caution block that lives INSIDE the URL Slug card. Changing an indexed page's
+// slug without a 301 redirect drops its search rankings to zero and breaks every
+// external link to the old URL - a warning (avoidable), not an error.
+function SlugRedirectNotice() {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(0,0,0,0.07)" }}>
+      <div style={{ padding: "8px 10px", background: "rgba(245,158,11,0.08)", borderLeft: "2px solid #f59e0b", borderRadius: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+          <svg width="12" height="12" viewBox="0 0 20 20" fill="#f59e0b" aria-hidden="true">
+            <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+          </svg>
+          <span style={{ fontSize: 10.5, fontWeight: 700, color: "#b45309", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            Changing a URL?
+          </span>
+        </div>
+        <div style={{ fontSize: 11, color: "#1f2937", lineHeight: 1.55 }}>
+          If the page has been published and indexed, you MUST add a 301 redirect from the old slug to the new one before changing it. For a brand-new page that's never been published, no redirect needed.
+        </div>
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          style={{ display: "flex", alignItems: "center", gap: 3, marginTop: 6, padding: 0, background: "none", border: "none", cursor: "pointer", fontSize: 10.5, fontWeight: 700, color: "#b45309", fontFamily: "inherit" }}
+        >
+          {expanded ? "Show less" : "Learn more"}
+          <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor" style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 150ms" }}>
+            <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+          </svg>
+        </button>
+        {expanded && (
+          <ul style={{ margin: "6px 0 0", paddingLeft: 16, fontSize: 11, color: "#1f2937", lineHeight: 1.55 }}>
+            <li>Without the 301, the page loses every search ranking and every external link to it breaks.</li>
+            <li>A 301 preserves the rankings and link equity built up on the old URL.</li>
+            <li>Set this up using vanity redirects in Sanity.</li>
+          </ul>
+        )}
+      </div>
+    </div>
+  );
 }
 
 const cardStyle: React.CSSProperties = {
@@ -43,7 +149,7 @@ function StatusBadge({ status }: { status: TechnicalAuditItem["status"] }) {
   );
 }
 
-function AuditCard({ label, value, status, recommendation, anchorId }: { label: string; value: string; status: TechnicalAuditItem["status"]; recommendation?: string; anchorId?: string }) {
+function AuditCard({ label, value, status, recommendation, anchorId, footer }: { label: string; value: string; status: TechnicalAuditItem["status"]; recommendation?: string; anchorId?: string; footer?: React.ReactNode }) {
   return (
     <div id={anchorId} style={cardStyle}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
@@ -66,6 +172,9 @@ function AuditCard({ label, value, status, recommendation, anchorId }: { label: 
           {recommendation}
         </div>
       )}
+      {/* Optional extra content inside the card box (e.g. the 301 redirect caution
+          under URL Slug) - same box, no connector. */}
+      {footer}
     </div>
   );
 }
@@ -441,9 +550,13 @@ function LinkCheckCard({ urls, results, isLoading, error, hasRun, onCheck }: { u
 }
 
 export function TechnicalTab({
-  text, documentFields, isLoading,
+  text, documentFields, primaryKeyword, secondaryKeyword, isLoading,
   linkCheckResults, isLinkCheckLoading, linkCheckError, hasRunLinkCheck, onCheckLinks,
 }: TechnicalTabProps) {
+  const urlSlugAudit = useMemo(
+    () => urlAudit(documentFields?.slug, primaryKeyword, secondaryKeyword),
+    [documentFields?.slug, primaryKeyword, secondaryKeyword]
+  );
   const headings = documentFields?.headings || [];
   const headingsDetailed = documentFields?.headingsDetailed;
   const headingsForStructure: HeadingItem[] = headingsDetailed ?? headings.map((t) => ({ text: t, level: 2 }));
@@ -498,6 +611,15 @@ export function TechnicalTab({
 
   return (
     <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+      <AuditCard
+        anchorId="anchor-url-slug"
+        label={urlSlugAudit.label}
+        value={urlSlugAudit.value}
+        status={urlSlugAudit.status}
+        recommendation={urlSlugAudit.recommendation}
+        footer={<SlugRedirectNotice />}
+      />
+
       {wordAudit && <AuditCard anchorId="anchor-word-count" label={wordAudit.label} value={wordAudit.value} status={wordAudit.status} recommendation={wordAudit.recommendation} />}
 
       {structureAudits.map((a, i) => (
