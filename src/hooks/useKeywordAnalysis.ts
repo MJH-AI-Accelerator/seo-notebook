@@ -154,7 +154,10 @@ export function useKeywordAnalysis(
       controller.abort();
       // Also cancel any volume lookup kicked off from this analysis's resolution, so a
       // stale lookup from the previous input can't write volumes after the input changed.
+      // Reset the volumes spinner too: the aborted lookup skips its own reset, and the
+      // next analysis may have all-cached terms (no new lookup) which would leave it stuck.
       volumeAbortRef.current?.abort();
+      setIsVolumesLoading(false);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text, apiUrl, publication, effectiveSeeds?.join(","), focusPrimary, JSON.stringify(documentFields)]);
