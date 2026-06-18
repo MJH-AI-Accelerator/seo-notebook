@@ -24,12 +24,14 @@ export async function fetchAnalysis(
   publication?: string,
   seedKeywords?: string[],
   documentFields?: DocumentFields,
-  focusKeyword?: string
+  focusKeyword?: string,
+  signal?: AbortSignal
 ): Promise<SEOAnalysis | DeepAnalysis> {
   const response = await fetch(`${apiUrl}/api/seo-copilot/analyze`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ content, mode, publication, seedKeywords, documentFields, focusKeyword }),
+    signal,
   });
 
   const text = await response.text();
@@ -83,12 +85,14 @@ export async function submitFeedback(
 
 export async function lookupKeywords(
   apiUrl: string,
-  keywords: string[]
+  keywords: string[],
+  signal?: AbortSignal
 ): Promise<{ results: { keyword: string; volume: number; cpc: number; competition: number }[]; apiUnitsUsed: number }> {
   const response = await fetch(`${apiUrl}/api/seo-copilot/keywords`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ keywords }),
+    signal,
   });
 
   if (!response.ok) {

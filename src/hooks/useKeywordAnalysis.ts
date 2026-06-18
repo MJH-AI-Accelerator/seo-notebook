@@ -99,6 +99,13 @@ export function useKeywordAnalysis(
   }, [text, deepAnalysis, aeoTextSnapshot]);
 
   const lastAnalysisRef = useRef<SEOAnalysis | null>(null);
+  // AbortControllers so stale async results can't overwrite fresh state and we stop
+  // wasteful network round-trips when the input changes or the hook unmounts.
+  const volumeAbortRef = useRef<AbortController | null>(null);
+  const deepAbortRef = useRef<AbortController | null>(null);
+  // Holds the latest doVolumeLookup so the analysis effect calls the current version
+  // (avoids a stale-closure call after apiUrl/cacheKey change).
+  const doVolumeLookupRef = useRef<(a: SEOAnalysis, terms?: string[]) => void>(() => {});
 
   useEffect(() => {
     if ((!text || text.trim().length < 20) && (!effectiveSeeds || effectiveSeeds.length === 0)) {
@@ -107,10 +114,11 @@ export function useKeywordAnalysis(
     }
 
     let cancelled = false;
+    const controller = new AbortController();
     setIsLoading(true);
     setError(null);
 
-    fetchAnalysis(apiUrl, text, "realtime", publication, effectiveSeeds, documentFields, focusPrimary)
+    fetchAnalysis(apiUrl, text, "realtime", publication, effectiveSeeds, documentFields, focusPrimary, controller.signal)
       .then((result) => {
         if (cancelled) return;
         const analysisResult = result as SEOAnalysis;
@@ -131,18 +139,19 @@ export function useKeywordAnalysis(
         const uncachedTerms = allTerms.filter((t) => !volumeMapRef.current.has(t.toLowerCase()));
 
         if (uncachedTerms.length > 0) {
-          doVolumeLookup(analysisResult, uncachedTerms);
+          doVolumeLookupRef.current(analysisResult, uncachedTerms);
         }
       })
       .catch((err) => {
-        if (!cancelled) {
-          setError(err.message);
-          setIsLoading(false);
-        }
+        // Aborted (input changed or unmounted) is not a real error.
+        if (cancelled || controller.signal.aborted || err?.name === "AbortError") return;
+        setError(err.message);
+        setIsLoading(false);
       });
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text, apiUrl, publication, effectiveSeeds?.join(","), focusPrimary, JSON.stringify(documentFields)]);
@@ -167,8 +176,13 @@ export function useKeywordAnalysis(
       return;
     }
 
-    lookupKeywords(apiUrl, lookupTerms)
+    volumeAbortRef.current?.abort();
+    const vc = new AbortController();
+    volumeAbortRef.current = vc;
+
+    lookupKeywords(apiUrl, lookupTerms, vc.signal)
       .then(({ results }) => {
+        if (vc.signal.aborted) return;
         // Add new results to persistent cache
         results.forEach((r) => volumeMapRef.current.set(r.keyword.toLowerCase(), r));
         // Re-apply all cached volumes to current analysis
@@ -182,10 +196,24 @@ export function useKeywordAnalysis(
         } catch { /* ignore */ }
         setIsVolumesLoading(false);
       })
-      .catch(() => {
+      .catch((err) => {
+        // Aborted (superseded lookup or unmount) is not a real error.
+        if (vc.signal.aborted || err?.name === "AbortError") return;
         setIsVolumesLoading(false);
       });
   }, [apiUrl, cacheKey]);
+
+  // Keep the ref pointed at the latest doVolumeLookup so the analysis effect (which
+  // does not depend on it) always calls the current version.
+  useEffect(() => {
+    doVolumeLookupRef.current = doVolumeLookup;
+  }, [doVolumeLookup]);
+
+  // Abort any in-flight volume lookup or deep analysis on unmount.
+  useEffect(() => () => {
+    volumeAbortRef.current?.abort();
+    deepAbortRef.current?.abort();
+  }, []);
 
   const refreshVolumes = useCallback(() => {
     const current = lastAnalysisRef.current || analysis;
@@ -202,12 +230,19 @@ export function useKeywordAnalysis(
     setAeoContentChanged(false);
     setAeoTextSnapshot(text);
 
-    fetchAnalysis(apiUrl, text, "deep", publication, effectiveSeeds, documentFields, focusPrimary)
+    deepAbortRef.current?.abort();
+    const dc = new AbortController();
+    deepAbortRef.current = dc;
+
+    fetchAnalysis(apiUrl, text, "deep", publication, effectiveSeeds, documentFields, focusPrimary, dc.signal)
       .then((result) => {
+        if (dc.signal.aborted) return;
         setDeepAnalysis(result as DeepAnalysis);
         setIsDeepLoading(false);
       })
       .catch((err) => {
+        // Aborted (superseded run or unmount) is not a real error.
+        if (dc.signal.aborted || err?.name === "AbortError") return;
         setError(err.message);
         setIsDeepLoading(false);
       });

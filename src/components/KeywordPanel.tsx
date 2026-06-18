@@ -315,7 +315,7 @@ function PrimaryKeywordSelector({
                     {candidate.term}
                   </span>
                   {candidate.volume != null && (
-                    <span style={{ fontSize: 11, fontWeight: 600, color: "#1f2937" }}>{abbrevVol(candidate.volume)}/mo</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "#1f2937" }}>{abbrevVol(candidate.volume) === "N/A" ? "N/A" : `${abbrevVol(candidate.volume)}/mo`}</span>
                   )}
                   <span style={{ fontSize: 10, color: "#1f2937" }}>
                     {Math.round(candidate.confidence * 100)}% confidence
@@ -516,7 +516,9 @@ function SuggestedKeywordsCard({
       const res = await fetch(`${apiUrl}/api/seo-copilot/keyword-help`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ keyword: term, content: text, publication, previousSuggestions }),
+        // Clip to 5,000 chars: the backend only reads the first 4,000 anyway, so sending
+        // the full article needlessly bloats the request on long pieces.
+        body: JSON.stringify({ keyword: term, content: text.slice(0, 5000), publication, previousSuggestions }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -748,7 +750,7 @@ function SuggestedKeywordsCard({
               <span style={{ fontSize: 12, fontWeight: kw.inContent ? 500 : 600, flexGrow: 1, color: "#1f2937" }}>{kw.term}</span>
               {enrichingTerms.has(kw.term) && <LoadingBars size="xs" color="#6b7280" />}
               {!enrichingTerms.has(kw.term) && kw.volume != null && (
-                <span style={{ fontSize: 10.5, fontWeight: 600, color: "#1f2937", flexShrink: 0 }} title="Monthly searches">{abbrevVol(kw.volume)}/mo</span>
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: "#1f2937", flexShrink: 0 }} title="Monthly searches">{abbrevVol(kw.volume) === "N/A" ? "N/A" : `${abbrevVol(kw.volume)}/mo`}</span>
               )}
               {kw.placement && <PlacementIndicators placement={kw.placement} />}
               {!kw.inContent && <LightbulbButton onClick={() => fetchHelp(kw.term)} isLoading={loadingTerm === kw.term} />}
@@ -840,8 +842,11 @@ export function KeywordPanel({
 
   useEffect(() => {
     if (defaultSelectedTerm && defaultSelectedTerm !== prevDefaultRef.current) {
-      setSelectedPrimaryTerm((prev) => prev === prevDefaultRef.current ? defaultSelectedTerm : prev);
+      // Snapshot the old default BEFORE mutating the ref - the setState updater is queued and
+      // runs after this effect body, so it must compare against the old value, not the new one.
+      const oldDefault = prevDefaultRef.current;
       prevDefaultRef.current = defaultSelectedTerm;
+      setSelectedPrimaryTerm((prev) => (prev === oldDefault ? defaultSelectedTerm : prev));
     }
   }, [defaultSelectedTerm]);
 
