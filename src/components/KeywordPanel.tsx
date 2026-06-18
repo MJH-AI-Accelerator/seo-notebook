@@ -315,7 +315,7 @@ function PrimaryKeywordSelector({
                     {candidate.term}
                   </span>
                   {candidate.volume != null && (
-                    <span style={{ fontSize: 11, fontWeight: 600, color: "#1f2937" }}>{abbrevVol(candidate.volume) === "N/A" ? "N/A" : `${abbrevVol(candidate.volume)}/mo`}</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "#1f2937" }}>{candidate.volume === 0 ? "N/A" : `${abbrevVol(candidate.volume)}/mo`}</span>
                   )}
                   <span style={{ fontSize: 10, color: "#1f2937" }}>
                     {Math.round(candidate.confidence * 100)}% confidence
@@ -750,7 +750,7 @@ function SuggestedKeywordsCard({
               <span style={{ fontSize: 12, fontWeight: kw.inContent ? 500 : 600, flexGrow: 1, color: "#1f2937" }}>{kw.term}</span>
               {enrichingTerms.has(kw.term) && <LoadingBars size="xs" color="#6b7280" />}
               {!enrichingTerms.has(kw.term) && kw.volume != null && (
-                <span style={{ fontSize: 10.5, fontWeight: 600, color: "#1f2937", flexShrink: 0 }} title="Monthly searches">{abbrevVol(kw.volume) === "N/A" ? "N/A" : `${abbrevVol(kw.volume)}/mo`}</span>
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: "#1f2937", flexShrink: 0 }} title="Monthly searches">{kw.volume === 0 ? "N/A" : `${abbrevVol(kw.volume)}/mo`}</span>
               )}
               {kw.placement && <PlacementIndicators placement={kw.placement} />}
               {!kw.inContent && <LightbulbButton onClick={() => fetchHelp(kw.term)} isLoading={loadingTerm === kw.term} />}

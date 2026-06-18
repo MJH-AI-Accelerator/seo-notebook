@@ -152,6 +152,9 @@ export function useKeywordAnalysis(
     return () => {
       cancelled = true;
       controller.abort();
+      // Also cancel any volume lookup kicked off from this analysis's resolution, so a
+      // stale lookup from the previous input can't write volumes after the input changed.
+      volumeAbortRef.current?.abort();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text, apiUrl, publication, effectiveSeeds?.join(","), focusPrimary, JSON.stringify(documentFields)]);
