@@ -95,12 +95,14 @@ function buildSuggestedKeywords(
   const lowerText = documentText.toLowerCase();
 
   for (const kw of supporting) {
+    if (kw == null || typeof kw.term !== "string") continue;
     const actuallyInContent = lowerText.includes(kw.term.toLowerCase());
     const livePlacement = computePlacementClient(kw.term, documentText, documentFields);
     merged.push({ term: kw.term, volume: kw.volume ?? 0, inContent: actuallyInContent, placement: livePlacement });
   }
 
   for (const kw of missing) {
+    if (kw == null || typeof kw.term !== "string") continue;
     const actuallyInContent = lowerText.includes(kw.term.toLowerCase());
     const livePlacement = computePlacementClient(kw.term, documentText, documentFields);
     merged.push({ term: kw.term, volume: kw.volume ?? 0, inContent: actuallyInContent, reason: kw.reason, placement: livePlacement });

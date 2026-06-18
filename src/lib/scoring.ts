@@ -88,7 +88,7 @@ export function calculateContentScoreDetailed(content: string, analysis: SEOAnal
   // 2. Supporting keyword coverage (up to 25)
   const supportingKws = analysis.supportingKeywords || [];
   if (supportingKws.length > 0) {
-    const inContentCount = supportingKws.filter((kw) => lowerContent.includes(kw.term.toLowerCase())).length;
+    const inContentCount = supportingKws.filter((kw) => kw != null && typeof kw.term === "string" && lowerContent.includes(kw.term.toLowerCase())).length;
     const coverageRatio = inContentCount / supportingKws.length;
     const pts = Math.round(coverageRatio * 25);
     components.push({

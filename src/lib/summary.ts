@@ -54,6 +54,13 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
   const { analysis, deepAnalysis, documentFields, linkingSuggestions, linkCheckResults, text } = input;
   const primaryKeyword = input.primaryKeyword || analysis?.primaryKeyword?.term;
   const secondaryKeyword = input.secondaryKeyword || "";
+  const bodyText = (() => {
+    if (!documentFields?.title) return text;
+    if (!text.startsWith(documentFields.title)) return text;
+    const rest = text.slice(documentFields.title.length);
+    if (rest === "" || /^\s/.test(rest)) return rest.trimStart();
+    return text;
+  })();
 
   // ---------- META: title ----------
   // Length warnings removed - the article title IS the page title and editors
@@ -159,7 +166,7 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
     items.push({
       id: "meta-slug-missing",
       category: "meta",
-      severity: "error",
+      severity: "warning",
       label: "URL slug missing",
       description: "No URL slug set.",
       howToFix: "Add a short, descriptive slug that leads with your primary keyword.",
@@ -192,7 +199,7 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
   // ---------- CONTENT: word count ----------
   // 450 is the body-text floor (per editor guidance). 1,500+ is the
   // competitive target for HCP clinical articles.
-  const wordCount = text ? text.trim().split(/\s+/).filter(Boolean).length : 0;
+  const wordCount = bodyText ? bodyText.trim().split(/\s+/).filter(Boolean).length : 0;
   // Videos, podcasts, news, briefs, etc. are legitimately short (the body is a
   // summary, not the deliverable), so they're exempt from the word-count floor.
   const isShortForm = isShortFormContent(documentFields, documentFields?.title);
@@ -227,7 +234,7 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
   const h2Count = headingsDetailed
     ? headingsDetailed.filter((h) => h.level === 2 || h.level === 3).length
     : headings.length;
-  if (headings.length === 0 && wordCount > 200 && wordCount < 1000) {
+  if (h2Count === 0 && wordCount > 200 && wordCount < 1000) {
     items.push({
       id: "headings-missing",
       category: "headings",
@@ -335,7 +342,7 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
     if (GENERIC_FN_RE.test(base)) return true;
     if (/_/.test(base) || /\s/.test(base)) return true;
     const words = base.split("-").filter(Boolean);
-    return words.length < 2 || words.length > 7;
+    return words.length < 2 || words.length > 5;
   });
   if (badFilenames.length > 0) {
     items.push({
@@ -353,7 +360,7 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
     if (!trimmed) return false;
     const len = trimmed.length;
     const wc = trimmed.split(/\s+/).filter(Boolean).length;
-    return len > 125 || wc < 2;
+    return len >= 125 || wc < 2;
   });
   if (badAlts.length > 0) {
     items.push({
@@ -390,7 +397,7 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
     // Keywords haven't loaded - skip
   } else {
     // If primary is missing from body, flag it
-    if (text && !containsKeywordTokens(text, primaryKeyword)) {
+    if (bodyText && !containsKeywordTokens(bodyText, primaryKeyword)) {
       items.push({
         id: "keywords-primary-not-in-body",
         category: "keywords",
@@ -422,7 +429,7 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
 
   // ---------- KEYWORDS: secondary ----------
   if (secondaryKeyword) {
-    if (text && !containsKeywordTokens(text, secondaryKeyword)) {
+    if (bodyText && !containsKeywordTokens(bodyText, secondaryKeyword)) {
       items.push({
         id: "secondary-not-in-body",
         category: "keywords",

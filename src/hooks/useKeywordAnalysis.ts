@@ -211,7 +211,7 @@ export function useKeywordAnalysis(
         setError(err.message);
         setIsDeepLoading(false);
       });
-  }, [text, apiUrl, publication, effectiveSeeds?.join(","), documentFields]);
+  }, [text, apiUrl, publication, effectiveSeeds?.join(","), documentFields, focusPrimary]);
 
   return {
     analysis,
