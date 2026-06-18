@@ -251,7 +251,7 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
       category: "headings",
       severity: "error",
       label: "Long article without section headings",
-      description: `${wordCount} words and no H2 headings.`,
+      description: `${wordCount} words and no H2 or H3 section headings.`,
       howToFix: "Add 2-3 H2 headings to break the article into scannable sections.",
       jumpTo: { tab: "technical", anchorId: "anchor-headings-structure" },
     });
@@ -261,7 +261,7 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
       category: "headings",
       severity: "warning",
       label: "Long article could use more section headings",
-      description: `${h2Count} H2 heading${h2Count === 1 ? "" : "s"} for ${wordCount} words.`,
+      description: `${h2Count} section heading${h2Count === 1 ? "" : "s"} for ${wordCount} words.`,
       howToFix: "Long articles read best with 1 H2 per 300-400 words. Add more named section breaks.",
       jumpTo: { tab: "technical", anchorId: "anchor-headings-structure" },
     });
@@ -271,7 +271,7 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
       category: "headings",
       severity: "warning",
       label: "Article could use more section headings",
-      description: `${h2Count} H2 heading${h2Count === 1 ? "" : "s"} for ${wordCount} words.`,
+      description: `${h2Count} section heading${h2Count === 1 ? "" : "s"} for ${wordCount} words.`,
       howToFix: "Articles above 1,500 words usually need at least 3 H2 sections. Break the content into more named blocks.",
       jumpTo: { tab: "technical", anchorId: "anchor-headings-structure" },
     });
