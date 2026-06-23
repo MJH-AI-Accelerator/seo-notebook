@@ -318,7 +318,7 @@ function PrimaryKeywordSelector({
                     <span style={{ fontSize: 11, fontWeight: 600, color: "#1f2937" }}>{candidate.volume === 0 ? "N/A" : `${abbrevVol(candidate.volume)}/mo`}</span>
                   )}
                   <span style={{ fontSize: 10, color: "#1f2937" }}>
-                    {Math.round(candidate.confidence * 100)}% confidence
+                    {Math.round((candidate.confidence ?? 0) * 100)}% confidence
                   </span>
                 </div>
                 {candidate.placement && (
@@ -356,7 +356,7 @@ function SecondaryKeywordSelector({
 
   // The selected secondary may be a custom term not present in `options` - append it
   // so the radio still shows as selected.
-  const opts = selectedTerm && !options.some((o) => o.term === selectedTerm)
+  const opts = selectedTerm && !options.some((o) => o.term.toLowerCase() === selectedTerm.toLowerCase())
     ? [...options, { term: selectedTerm, volume: null }]
     : options;
 
@@ -912,7 +912,7 @@ export function KeywordPanel({
       {/* On-page instructions: the two-keyword target process */}
       <div style={{ ...cardStyle, padding: "11px 13px", background: "rgba(0,93,172,0.05)", boxShadow: "inset 0 0 0 1px rgba(0,93,172,0.12)" }}>
         <div style={{ fontSize: 11.5, color: "#1f2937", lineHeight: 1.55 }}>
-          <strong style={{ color: "#00468a" }}>Choose your target keywords.</strong> Pick one <strong>Primary</strong> keyword (required) and, optionally, one <strong>Secondary</strong> keyword. Copilot optimizes the whole article - title, meta, URL, headings, and images - toward both.
+          <strong style={{ color: "#00468a" }}>Choose your target keywords.</strong> Pick one <strong>Primary</strong> keyword (required) and, optionally, one <strong>Secondary</strong> keyword. Copilot then optimizes its recommendations toward both.
         </div>
       </div>
 

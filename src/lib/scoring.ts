@@ -41,7 +41,7 @@ export function calculateContentScoreDetailed(content: string, analysis: SEOAnal
     // adjacent phrase, but if every token is in the body the keyword IS present.
     // Try the exact phrase first; otherwise fall back to token co-occurrence (all
     // tokens present) and use the rarest token as the concept's mention count.
-    // (This mirrors tokensContain() used by the Meta + Summary audits.)
+    // (This mirrors containsKeywordTokens() used by the Meta + Summary audits.)
     const tokens = primaryTerm.split(/\s+/).filter((t) => t.length > 1);
     const phraseCount = countWholeMatches(lowerContent, primaryTerm);
     let occurrences = phraseCount;

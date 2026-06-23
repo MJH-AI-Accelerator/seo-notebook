@@ -597,7 +597,6 @@ export function SEONotebookPanel({ text, documentFields, documentId }: SEONotebo
                 publication={publication}
                 runDeepAnalysis={keywordAnalysisState.runDeepAnalysis}
                 aeoContentChanged={keywordAnalysisState.aeoContentChanged}
-                documentId={documentId}
                 contentSuggestions={contentSuggestions}
                 isCSLoading={isCSLoading}
                 csError={csError}

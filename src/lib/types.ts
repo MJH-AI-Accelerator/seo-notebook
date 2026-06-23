@@ -100,6 +100,14 @@ export interface DocumentFields {
   bodyLinks?: string[];
   contentCategory?: string;
   contentPlacement?: string[];
+  // E-E-A-T fields - 2026 healthcare content scrutiny
+  authorName?: string;
+  authorCredentials?: string;
+  authorBioUrl?: string;
+  authorIsReference?: boolean;
+  publishedAt?: string;
+  updatedAt?: string;
+  lastReviewedAt?: string;
 }
 
 // V3 - Tabbed UI additions

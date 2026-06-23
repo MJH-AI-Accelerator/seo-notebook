@@ -11,14 +11,18 @@ const API_URL = process.env.NODE_ENV === "development" ? "http://localhost:3000"
 const DOCUMENT_ID = "seo-notebook-local";
 
 const MJH_PUBLICATIONS = [
-  "Pharmacy Times",
-  "Dermatology Times",
-  "Cardiology Times",
-  "Ophthalmology Times",
-  "Optometry Times",
-  "Urology Times",
-  "Medical Economics",
-  "Psychiatric Times",
+  { id: "pharmacytimes", label: "Pharmacy Times" },
+  { id: "onclive", label: "OncLive" },
+  { id: "hcplive", label: "HCPLive" },
+  { id: "ajmc", label: "AJMC" },
+  { id: "cancernetwork", label: "Cancer Network" },
+  { id: "dermatologytimes", label: "Dermatology Times" },
+  { id: "cardiologytimes", label: "Cardiology Times" },
+  { id: "ophthalmologytimes", label: "Ophthalmology Times" },
+  { id: "optometrytimes", label: "Optometry Times" },
+  { id: "urologytimes", label: "Urology Times" },
+  { id: "medicaleconomics", label: "Medical Economics" },
+  { id: "psychiatrictimes", label: "Psychiatric Times" },
 ];
 
 function useMediaQuery(query: string): boolean {
@@ -204,7 +208,7 @@ function App() {
               }}
             >
               <option value="">All / General</option>
-              {MJH_PUBLICATIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+              {MJH_PUBLICATIONS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
             </select>
           </div>
 
@@ -244,7 +248,7 @@ function App() {
             }}
           >
             <option value="">All / General</option>
-            {MJH_PUBLICATIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+            {MJH_PUBLICATIONS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
           </select>
         </div>
 

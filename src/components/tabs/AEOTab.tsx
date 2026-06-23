@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { LoadingBars } from "../LoadingBars";
 import { FeedbackButton } from "../FeedbackButton";
 import { AEO_PURPLE } from "../styles";
@@ -13,7 +13,6 @@ interface AEOTabProps {
   publication?: string;
   runDeepAnalysis: () => void;
   aeoContentChanged: boolean;
-  documentId?: string;
   contentSuggestions: ContentSuggestions | null;
   isCSLoading: boolean;
   csError: string | null;
@@ -64,11 +63,14 @@ function SectionHeader({ label, iconColor, ai }: { label: string; iconColor: str
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => { return () => { if (copyTimerRef.current) clearTimeout(copyTimerRef.current); }; }, []);
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopied(false), 1500);
     } catch {
       // silent
     }
@@ -116,7 +118,7 @@ export function AEOTab({
     return (
       <div style={{ padding: 24, textAlign: "center" }}>
         <div style={{ fontSize: 13, color: "#4b5563", fontWeight: 500 }}>AEO data not available yet</div>
-        <div style={{ fontSize: 11, color: "#d1d5db", marginTop: 4 }}>Start writing in the document to begin</div>
+        <div style={{ fontSize: 11, color: "#6b7280", marginTop: 4 }}>Start writing in the document to begin</div>
       </div>
     );
   }
@@ -139,7 +141,7 @@ export function AEOTab({
         <div onClick={runDeepAnalysis} style={{
           padding: "8px 12px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8,
           display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer",
-        }}>
+        }} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); runDeepAnalysis(); } }}>
           <span style={{ fontSize: 11, color: "#92400e" }}>Content has changed since this was generated.</span>
           <span style={{ fontSize: 11, fontWeight: 600, color: AEO_PURPLE, textDecoration: "underline" }}>Update</span>
         </div>

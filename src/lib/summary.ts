@@ -179,7 +179,7 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
         category: "meta",
         severity: "opportunity",
         label: "Primary keyword not in URL",
-        description: `Slug doesn't contain "${primaryKeyword}".`,
+        description: `The URL doesn't include "${primaryKeyword}".`,
         howToFix: "Work your primary keyword into the URL, ideally at the start - if the address gets shortened, a leading keyword still shows.",
         jumpTo: { tab: "technical", anchorId: "anchor-url-slug" },
       });
