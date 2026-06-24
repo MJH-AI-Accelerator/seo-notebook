@@ -949,6 +949,12 @@ export function KeywordPanel({
         </div>
       )}
 
+      {error && analysis && (
+        <div style={{ padding: "4px 12px", fontSize: 11, color: "#dc2626" }}>
+          Could not refresh analysis: {error}
+        </div>
+      )}
+
       {isLoading && analysis && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center" }}>
           <LoadingBars size="xs" color="#9ca3af" />
