@@ -333,128 +333,6 @@ function PrimaryKeywordSelector({
   );
 }
 
-function SecondaryKeywordSelector({
-  options,
-  selectedTerm,
-  onSelect,
-}: {
-  options: { term: string; volume: number | null }[];
-  selectedTerm: string;
-  onSelect: (term: string) => void;
-}) {
-  const [customInputOpen, setCustomInputOpen] = useState(false);
-  const [customValue, setCustomValue] = useState("");
-
-  const handleCustomSubmit = () => {
-    const trimmed = customValue.trim();
-    if (trimmed) {
-      onSelect(trimmed);
-      setCustomValue("");
-      setCustomInputOpen(false);
-    }
-  };
-
-  // The selected secondary may be a custom term not present in `options` - append it
-  // so the radio still shows as selected.
-  const opts = selectedTerm && !options.some((o) => o.term.toLowerCase() === selectedTerm.toLowerCase())
-    ? [...options, { term: selectedTerm, volume: null }]
-    : options;
-
-  return (
-    <div style={cardStyle}>
-      <SectionHeader
-        label="Secondary Keyword"
-        iconColor={MJH_BLUE}
-        actionButton={
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: "#9ca3af" }}>Optional</span>
-            <PencilButton onClick={() => setCustomInputOpen(!customInputOpen)} active={customInputOpen} />
-          </div>
-        }
-      />
-
-      <div style={{ fontSize: 11, color: "#4b5563", lineHeight: 1.5, marginBottom: 8 }}>
-        Pick one more keyword to optimize for. Copilot then checks your title, meta, URL, headings, and images against both keywords.
-      </div>
-
-      {customInputOpen && (
-        <div style={{ marginBottom: 8, display: "flex", gap: 6 }}>
-          <input
-            type="text"
-            value={customValue}
-            onChange={(e) => setCustomValue(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") handleCustomSubmit(); }}
-            placeholder="Type a custom secondary keyword"
-            autoFocus
-            style={{ flex: 1, padding: "5px 8px", fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb", outline: "none", fontFamily: "inherit" }}
-          />
-          <button
-            onClick={handleCustomSubmit}
-            disabled={!customValue.trim()}
-            style={{
-              padding: "5px 10px", fontSize: 11, fontWeight: 600, borderRadius: 6, border: "none",
-              background: customValue.trim() ? MJH_BLUE : "#e5e7eb",
-              color: customValue.trim() ? "#ffffff" : "#9ca3af",
-              cursor: customValue.trim() ? "pointer" : "not-allowed",
-            }}
-          >
-            Set
-          </button>
-        </div>
-      )}
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {/* None option - secondary is optional */}
-        <SecondaryOptionRow term="" label="None" selected={!selectedTerm} onSelect={() => onSelect("")} />
-        {opts.map((o) => (
-          <SecondaryOptionRow
-            key={o.term}
-            term={o.term}
-            label={o.term}
-            volume={o.volume}
-            selected={o.term === selectedTerm}
-            onSelect={() => onSelect(o.term)}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function SecondaryOptionRow({ term, label, volume, selected, onSelect }: { term: string; label: string; volume?: number | null; selected: boolean; onSelect: () => void }) {
-  return (
-    <div
-      onClick={onSelect}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        padding: "6px 8px",
-        borderRadius: 8,
-        cursor: "pointer",
-        background: selected ? "rgba(0,93,172,0.06)" : "transparent",
-        border: selected ? "1px solid rgba(0,93,172,0.2)" : "1px solid transparent",
-        transition: "all 150ms",
-      }}
-    >
-      <div style={{
-        width: 14, height: 14, borderRadius: "50%",
-        border: selected ? "none" : "2px solid #d1d5db",
-        background: selected ? MJH_BLUE : "transparent",
-        flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
-      }}>
-        {selected && <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#ffffff" }} />}
-      </div>
-      <span style={{ fontSize: 12, fontWeight: selected ? 600 : 400, color: term ? (selected ? "#00468a" : "#374151") : "#6b7280", flex: 1, minWidth: 0 }}>
-        {label}
-      </span>
-      {volume != null && (
-        <span style={{ fontSize: 11, fontWeight: 600, color: "#1f2937" }}>{volume === 0 ? "N/A" : `${abbrevVol(volume)}/mo`}</span>
-      )}
-    </div>
-  );
-}
-
 const PLACEMENT_FILTERS: { key: PlacementKey; label: string; letter: string }[] = [
   { key: "inBody", label: "Body", letter: "B" },
   { key: "inTitle", label: "Title", letter: "T" },
@@ -464,6 +342,13 @@ const PLACEMENT_FILTERS: { key: PlacementKey; label: string; letter: string }[] 
 ];
 
 const INITIAL_SHOW = 8;
+
+// Colorblind-safe purple (matches the ScoreDonut section-fit slice). Used as the
+// distinct accent for the secondary-keyword chooser folded into Supporting Keywords.
+const SECONDARY_PURPLE = "#9B59B6";
+// Darker purple for small (<=12px) text so it clears WCAG AA 4.5:1 on the light panel.
+// Circles, dots and borders keep the brighter brand purple above.
+const SECONDARY_PURPLE_TEXT = "#7D3C98";
 
 function computePlacementClient(term: string, content: string, fields?: DocumentFields): KeywordPlacement {
   const lower = term.toLowerCase();
@@ -478,6 +363,7 @@ function computePlacementClient(term: string, content: string, fields?: Document
 
 function SuggestedKeywordsCard({
   keywords, text, apiUrl, publication, documentFields, refreshVolumes, isVolumesLoading,
+  secondaryKeyword, onSelectSecondary, primaryTerm,
 }: {
   keywords: SuggestedKeyword[];
   text: string;
@@ -486,6 +372,9 @@ function SuggestedKeywordsCard({
   documentFields?: DocumentFields;
   refreshVolumes?: () => void;
   isVolumesLoading?: boolean;
+  secondaryKeyword?: string;
+  onSelectSecondary?: (term: string) => void;
+  primaryTerm?: string;
 }) {
   const [helpData, setHelpData] = useState<Record<string, KeywordHelpSuggestion[]>>({});
   const [loadingTerm, setLoadingTerm] = useState<string | null>(null);
@@ -496,6 +385,12 @@ function SuggestedKeywordsCard({
   const [expanded, setExpanded] = useState(false);
   const [extraKeywords, setExtraKeywords] = useState<SuggestedKeyword[]>([]);
   const [isGeneratingMore, setIsGeneratingMore] = useState(false);
+  // Secondary-keyword selection mode: when on, supporting rows swap their status dot
+  // for a clickable purple circle so the editor can pick one as the secondary target.
+  const [secSelecting, setSecSelecting] = useState(false);
+  // Entering selection mode expands the list so a circle appears next to EVERY supporting
+  // keyword (spec), not just the first INITIAL_SHOW rows visible while collapsed.
+  const startSecSelecting = () => { setExpanded(true); setSecSelecting(true); };
   const [sortAsc, setSortAsc] = useState(false);
   const [activeFilters, setActiveFilters] = useState<Set<PlacementKey>>(new Set());
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
@@ -564,9 +459,26 @@ function SuggestedKeywordsCard({
     placement: computePlacementClient(ek.term, text, documentFields),
     inContent: text.toLowerCase().includes(ek.term.toLowerCase()),
   }));
-  const allKeywords = [...sorted, ...liveExtras.filter((ek) => !sorted.some((s) => s.term.toLowerCase() === ek.term.toLowerCase()))];
+  const merged = [...sorted, ...liveExtras.filter((ek) => !sorted.some((s) => s.term.toLowerCase() === ek.term.toLowerCase()))];
+  // Hide N/A (no-search-volume) keywords entirely - editors only want terms with real volume.
+  // Two guards stop this from ever flashing an empty list: (1) while volumes are still loading
+  // every term reads as 0, so keep showing them until the lookup settles; (2) if NOTHING has
+  // volume (e.g. SEMrush failed, or a very niche topic) fall back to showing all of them.
+  const hasVol = (k: SuggestedKeyword) => k.volume != null && k.volume > 0;
+  const withVol = merged.filter(hasVol);
+  const allKeywords = isVolumesLoading || withVol.length === 0 ? merged : withVol;
   const visible = expanded ? allKeywords : allKeywords.slice(0, INITIAL_SHOW);
   const hiddenCount = allKeywords.length - INITIAL_SHOW;
+
+  // Secondary-keyword matching is case-insensitive so a stored secondary still highlights
+  // its row after re-analysis re-cases the term. `secondaryInList` flags an orphan secondary
+  // (set but no longer present in the list) so the banner can say so. `isPrimaryRow` stops the
+  // active primary from being offered as its own secondary.
+  const secLower = (secondaryKeyword || "").toLowerCase();
+  const primaryLower = (primaryTerm || "").toLowerCase();
+  const isSecondaryRow = (term: string) => secLower !== "" && term.toLowerCase() === secLower;
+  const isPrimaryRow = (term: string) => primaryLower !== "" && term.toLowerCase() === primaryLower;
+  const secondaryInList = secLower !== "" && allKeywords.some((k) => k.term.toLowerCase() === secLower);
 
   const toggleFilter = (key: PlacementKey) => {
     setActiveFilters((prev) => {
@@ -629,8 +541,23 @@ function SuggestedKeywordsCard({
     setIsGeneratingMore(false);
   };
 
+  // Auto-backfill ONCE per document: if, after volumes settle, the list is thin on real-volume
+  // terms, pull more keywords a single time. Bounded to one backfill per document open so it
+  // never loops or burns the keyword API on every keystroke or secondary change.
+  const didBackfillRef = useRef(false);
+  useEffect(() => {
+    if (didBackfillRef.current) return;
+    if (isVolumesLoading || isGeneratingMore || keywords.length === 0) return;
+    didBackfillRef.current = true;
+    const volCount = [...keywords, ...extraKeywords].filter((k) => k.volume != null && k.volume > 0).length;
+    if (volCount < 8) generateMoreKeywords();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keywords, isVolumesLoading]);
+
   return (
-    <div style={cardStyle}>
+    <div style={secSelecting
+      ? { ...cardStyle, border: `1.5px solid ${SECONDARY_PURPLE}`, boxShadow: [cardStyle.boxShadow, `0 0 0 1px rgba(155,89,182,0.25)`].filter(Boolean).join(", ") }
+      : cardStyle}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
         <div style={{ width: 6, height: 6, borderRadius: "50%", background: MJH_BLUE, flexShrink: 0 }} />
         <span style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", color: "#4b5563", fontWeight: 600, flex: 1 }}>
@@ -723,6 +650,76 @@ function SuggestedKeywordsCard({
         <PencilButton onClick={() => setManualInputOpen(!manualInputOpen)} active={manualInputOpen} />
       </div>
 
+      {/* Secondary-keyword chooser - folded into Supporting Keywords per spec.
+          Idle: a clickable purple notice. Selecting: a hint + cancel. Chosen: the
+          picked term in purple with Change / clear. */}
+      {/* Screen-reader announcement when selection mode toggles on. */}
+      <span aria-live="polite" style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap", border: 0 }}>
+        {secSelecting ? "Selection mode on. Pick a keyword below to set it as the secondary keyword." : ""}
+      </span>
+      {onSelectSecondary && (
+        secSelecting ? (
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+            marginBottom: 8, padding: "5px 10px", borderRadius: 8,
+            background: "rgba(155,89,182,0.08)", border: `1px solid rgba(155,89,182,0.35)`,
+          }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: SECONDARY_PURPLE_TEXT }}>
+              Pick a keyword below to set as secondary.
+            </span>
+            <button
+              onClick={() => setSecSelecting(false)}
+              style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, color: "#6b7280", padding: 2, fontFamily: "inherit" }}
+            >
+              Cancel
+            </button>
+          </div>
+        ) : secondaryKeyword ? (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8, marginBottom: 8,
+            padding: "5px 10px", borderRadius: 8,
+            background: "rgba(155,89,182,0.08)", border: `1px solid rgba(155,89,182,0.35)`,
+          }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: SECONDARY_PURPLE, flexShrink: 0 }} />
+            <span style={{ fontSize: 11, fontWeight: 600, color: SECONDARY_PURPLE_TEXT, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              Secondary: {secondaryKeyword}
+            </span>
+            {!secondaryInList && (
+              <span title="This keyword is no longer in the list below - re-pick or clear it." style={{ fontSize: 9.5, fontWeight: 600, fontStyle: "italic", color: "#9ca3af", flexShrink: 0 }}>
+                not in list
+              </span>
+            )}
+            <button
+              onClick={startSecSelecting}
+              style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, color: SECONDARY_PURPLE_TEXT, padding: 2, fontFamily: "inherit" }}
+            >
+              Change
+            </button>
+            <button
+              onClick={() => onSelectSecondary("")}
+              title="Clear secondary keyword"
+              aria-label="Clear secondary keyword"
+              style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, lineHeight: 1, color: "#9ca3af", padding: 2, fontFamily: "inherit" }}
+            >
+              {"×"}
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={startSecSelecting}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 8,
+              padding: "4px 10px", borderRadius: 8, cursor: "pointer",
+              background: "rgba(155,89,182,0.08)", border: `1px solid rgba(155,89,182,0.4)`,
+              color: SECONDARY_PURPLE_TEXT, fontSize: 11, fontWeight: 600, fontFamily: "inherit",
+            }}
+          >
+            <div style={{ width: 11, height: 11, borderRadius: "50%", border: `2px solid ${SECONDARY_PURPLE}`, flexShrink: 0 }} />
+            Click to choose a secondary keyword.
+          </button>
+        )
+      )}
+
       {manualInputOpen && (
         <div style={{ marginBottom: 8, display: "flex", gap: 6 }}>
           <input type="text" value={manualInputValue} onChange={(e) => setManualInputValue(e.target.value)}
@@ -746,8 +743,45 @@ function SuggestedKeywordsCard({
               display: "flex", alignItems: "center", gap: 8, padding: "5px 0",
               borderBottom: i < visible.length - 1 ? "1px solid #f3f4f6" : "none", minHeight: 28,
             }}>
-              <div style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, background: kw.inContent ? "#16a34a" : "#d1d5db" }} />
-              <span style={{ fontSize: 12, fontWeight: kw.inContent ? 500 : 600, flexGrow: 1, color: "#1f2937" }}>{kw.term}</span>
+              {/* Left indicator. Selection mode: a floating purple circle to pick this
+                  keyword as secondary. Otherwise: the chosen secondary shows a filled
+                  purple dot, the other keywords show nothing once a secondary is set,
+                  and with no secondary chosen the normal in-content status dot. */}
+              {secSelecting && onSelectSecondary ? (
+                isPrimaryRow(kw.term) ? (
+                  // The active primary keyword cannot also be the secondary - show a muted,
+                  // non-selectable marker instead of a pickable circle.
+                  <div title="Already your primary keyword" style={{ width: 14, height: 14, borderRadius: "50%", flexShrink: 0, border: "2px solid #e5e7eb", background: "transparent" }} />
+                ) : (
+                  <button
+                    className="seo-copilot-sec-circle"
+                    onClick={() => { onSelectSecondary(kw.term); setSecSelecting(false); }}
+                    aria-label={`Set ${kw.term} as the secondary keyword`}
+                    title={`Set "${kw.term}" as the secondary keyword`}
+                    style={{
+                      width: 14, height: 14, borderRadius: "50%", flexShrink: 0, padding: 0,
+                      border: `2px solid ${SECONDARY_PURPLE}`, background: "transparent", cursor: "pointer",
+                      animation: "seo-copilot-sec-float 1.8s ease-in-out infinite",
+                      animationDelay: `${(i % 5) * 0.12}s`,
+                    }}
+                  />
+                )
+              ) : isSecondaryRow(kw.term) ? (
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: SECONDARY_PURPLE, flexShrink: 0 }} />
+              ) : secondaryKeyword ? (
+                <div style={{ width: 8, height: 8, flexShrink: 0 }} />
+              ) : (
+                <div style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, background: kw.inContent ? "#16a34a" : "#d1d5db" }} />
+              )}
+              {/* Term - dark gray normally; purple + bold when it is the chosen secondary. */}
+              <span style={{
+                fontSize: 12,
+                fontWeight: isSecondaryRow(kw.term) ? 700 : kw.inContent ? 500 : 600,
+                flexGrow: 1,
+                color: !secSelecting && isSecondaryRow(kw.term) ? SECONDARY_PURPLE_TEXT : "#1f2937",
+              }}>
+                {kw.term}
+              </span>
               {enrichingTerms.has(kw.term) && <LoadingBars size="xs" color="#6b7280" />}
               {!enrichingTerms.has(kw.term) && kw.volume != null && (
                 <span style={{ fontSize: 10.5, fontWeight: 600, color: "#1f2937", flexShrink: 0 }} title="Monthly searches">{kw.volume === 0 ? "N/A" : `${abbrevVol(kw.volume)}/mo`}</span>
@@ -838,7 +872,7 @@ export function KeywordPanel({
       setSelectedPrimaryTerm(first);
       onSelectPrimary?.(first);
     }
-  }, [analysis?.primaryKeywordCandidates]);
+  }, [analysis?.primaryKeywordCandidates]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (defaultSelectedTerm && defaultSelectedTerm !== prevDefaultRef.current) {
@@ -888,24 +922,13 @@ export function KeywordPanel({
     ...c,
     placement: computePlacementClient(c.term, text, documentFields),
   }));
+  // Hide N/A (no-search-volume) primary candidates once volumes load, same as the supporting
+  // list - but always keep at least one so the selector is never empty.
+  const candHasVol = (c: { volume: number | null }) => c.volume != null && c.volume > 0;
+  const candWithVol = candidates.filter(candHasVol);
+  const visibleCandidates = isVolumesLoading || candWithVol.length === 0 ? candidates : candWithVol;
 
-  const activeTerm = candidates.find((c) => c.term === selectedPrimaryTerm) ? selectedPrimaryTerm : candidates[0]?.term ?? "";
-
-  // Build the secondary keyword option pool: same candidates as primary + suggested supporting
-  // keywords (deduped), with the active primary filtered out so editors can't pick the same keyword twice.
-  const activeTermLower = activeTerm.toLowerCase();
-  const secondaryOptions: { term: string; volume: number | null }[] = [];
-  const seenSecondary = new Set<string>();
-  for (const c of candidates) {
-    const key = c.term.toLowerCase();
-    if (key === activeTermLower) continue;
-    if (!seenSecondary.has(key)) { seenSecondary.add(key); secondaryOptions.push({ term: c.term, volume: c.volume }); }
-  }
-  for (const kw of suggestedKeywords) {
-    const key = kw.term.toLowerCase();
-    if (key === activeTermLower) continue;
-    if (!seenSecondary.has(key)) { seenSecondary.add(key); secondaryOptions.push({ term: kw.term, volume: kw.volume }); }
-  }
+  const activeTerm = visibleCandidates.find((c) => c.term === selectedPrimaryTerm) ? selectedPrimaryTerm : visibleCandidates[0]?.term ?? "";
 
   return (
     <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 12 }}>
@@ -919,24 +942,22 @@ export function KeywordPanel({
       {onSeedsChange && <SeedKeywordInput seeds={seedKeywords} onSeedsChange={onSeedsChange} />}
 
       <PrimaryKeywordSelector
-        candidates={candidates} selectedTerm={activeTerm}
+        candidates={visibleCandidates} selectedTerm={activeTerm}
         onSelect={(term: string) => { setSelectedPrimaryTerm(term); onSelectPrimary?.(term); }}
       />
 
-      {/* Secondary Keyword Selector (optional) */}
-      {onSelectSecondary && secondaryOptions.length > 0 && (
-        <SecondaryKeywordSelector
-          options={secondaryOptions}
-          selectedTerm={secondaryKeyword || ""}
-          onSelect={(term: string) => onSelectSecondary(term)}
-        />
-      )}
-
-      {suggestedKeywords.length > 0 && (
+      {/* Supporting Keywords (the secondary-keyword chooser is folded into this card).
+          Render when there are supporting keywords OR when secondary selection is enabled,
+          so the secondary chooser stays reachable even before any supporting keyword exists
+          (the editor can pencil-add one, then pick it). */}
+      {(suggestedKeywords.length > 0 || !!onSelectSecondary) && (
         <SuggestedKeywordsCard
           keywords={suggestedKeywords} text={text} apiUrl={apiUrl}
           publication={publication} documentFields={documentFields}
           refreshVolumes={refreshVolumes} isVolumesLoading={isVolumesLoading}
+          secondaryKeyword={secondaryKeyword}
+          onSelectSecondary={onSelectSecondary}
+          primaryTerm={activeTerm}
         />
       )}
 

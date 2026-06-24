@@ -57,7 +57,7 @@ export function SEONotebookPanel({ text, documentFields, documentId }: SEONotebo
   );
   const [selectedPrimary, setSelectedPrimary] = useState<string | undefined>();
   const [selectedSecondary, setSelectedSecondary] = useState<string>("");
-  const keywordAnalysisState = useKeywordAnalysis(text, apiUrl, publication, seedKeywords, documentFields, selectedPrimary, documentId);
+  const keywordAnalysisState = useKeywordAnalysis(text, apiUrl, publication, seedKeywords, documentFields, selectedPrimary, documentId, selectedSecondary);
 
   // activeTab is intentionally NOT persisted - every fresh panel mount starts on
   // Keywords, the workflow entry point.
@@ -361,6 +361,27 @@ export function SEONotebookPanel({ text, documentFields, documentId }: SEONotebo
     if (text && text.trim().length >= 50 && effectivePrimary) refreshLinkingSuggestions();
     if ((documentFields?.bodyLinks || []).length > 0) runLinkCheck();
   }, [keywordAnalysisState, text, effectivePrimary, documentFields?.bodyLinks, loadContentSuggestions, refreshLinkingSuggestions, runLinkCheck]);
+
+  // Keep a stable ref so the effect below always calls the latest onGenerateAll without
+  // adding it to the dependency array (which would re-register the effect on every analysis).
+  const onGenerateAllRef = useRef(onGenerateAll);
+  onGenerateAllRef.current = onGenerateAll;
+
+  // Choosing or changing the secondary keyword on the CURRENT document re-runs everything so
+  // every tab re-optimizes toward both keywords. Skip document switches and the first mount
+  // (those are not user picks - just cache loads).
+  const secAutoRunRef = useRef<{ doc: string; sec: string; init: boolean }>({ doc: documentId, sec: selectedSecondary, init: true });
+  useEffect(() => {
+    const prev = secAutoRunRef.current;
+    const docChanged = prev.doc !== documentId;
+    const secChanged = prev.sec !== selectedSecondary;
+    secAutoRunRef.current = { doc: documentId, sec: selectedSecondary, init: false };
+    if (prev.init || docChanged || !secChanged) return;
+    // Debounce so clicking THROUGH several secondary options only fires one full run-all.
+    const t = setTimeout(() => onGenerateAllRef.current(), 1500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSecondary, documentId]);
 
   const onSummaryItemClick = useCallback((item: SummaryItem) => {
     setActiveTab(item.jumpTo.tab);

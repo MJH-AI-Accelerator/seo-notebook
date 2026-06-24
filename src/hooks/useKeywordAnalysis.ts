@@ -48,7 +48,8 @@ export function useKeywordAnalysis(
   seedKeywords?: string[],
   documentFields?: DocumentFields,
   focusPrimary?: string,
-  documentId?: string
+  documentId?: string,
+  focusSecondary?: string
 ) {
   const cacheKey = documentId ? `seo-notebook-cache-${documentId}` : "seo-notebook-cache-v2";
   const loadCached = (): { analysis: SEOAnalysis | null; deepAnalysis: DeepAnalysis | null; seeds: string[] } => {
@@ -118,7 +119,7 @@ export function useKeywordAnalysis(
     setIsLoading(true);
     setError(null);
 
-    fetchAnalysis(apiUrl, text, "realtime", publication, effectiveSeeds, documentFields, focusPrimary, controller.signal)
+    fetchAnalysis(apiUrl, text, "realtime", publication, effectiveSeeds, documentFields, focusPrimary, focusSecondary, controller.signal)
       .then((result) => {
         if (cancelled) return;
         const analysisResult = result as SEOAnalysis;
@@ -160,7 +161,7 @@ export function useKeywordAnalysis(
       setIsVolumesLoading(false);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, apiUrl, publication, effectiveSeeds?.join(","), focusPrimary, JSON.stringify(documentFields)]);
+  }, [text, apiUrl, publication, effectiveSeeds?.join(","), focusPrimary, focusSecondary, JSON.stringify(documentFields)]);
 
   const doVolumeLookup = useCallback((analysisResult: SEOAnalysis, terms?: string[]) => {
     setIsVolumesLoading(true);
@@ -240,7 +241,7 @@ export function useKeywordAnalysis(
     const dc = new AbortController();
     deepAbortRef.current = dc;
 
-    fetchAnalysis(apiUrl, text, "deep", publication, effectiveSeeds, documentFields, focusPrimary, dc.signal)
+    fetchAnalysis(apiUrl, text, "deep", publication, effectiveSeeds, documentFields, focusPrimary, focusSecondary, dc.signal)
       .then((result) => {
         if (dc.signal.aborted) return;
         setDeepAnalysis(result as DeepAnalysis);
@@ -252,7 +253,7 @@ export function useKeywordAnalysis(
         setError(err.message);
         setIsDeepLoading(false);
       });
-  }, [text, apiUrl, publication, effectiveSeeds?.join(","), documentFields, focusPrimary]);
+  }, [text, apiUrl, publication, effectiveSeeds?.join(","), documentFields, focusPrimary, focusSecondary]);
 
   return {
     analysis,
