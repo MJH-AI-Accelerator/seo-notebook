@@ -377,7 +377,9 @@ export function SEONotebookPanel({ text, documentFields, documentId }: SEONotebo
     const secChanged = prev.sec !== selectedSecondary;
     secAutoRunRef.current = { doc: documentId, sec: selectedSecondary, init: false };
     if (prev.init || docChanged || !secChanged) return;
-    onGenerateAllRef.current();
+    // Debounce so clicking THROUGH several secondary options only fires one full run-all.
+    const t = setTimeout(() => onGenerateAllRef.current(), 1500);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSecondary, documentId]);
 

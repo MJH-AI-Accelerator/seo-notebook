@@ -541,15 +541,14 @@ function SuggestedKeywordsCard({
     setIsGeneratingMore(false);
   };
 
-  // Auto-backfill: when the supporting list is thin on real-volume terms (on launch, and after
-  // a re-analysis such as choosing a secondary keyword), pull more keywords ONCE so the editor
-  // sees a full list of volume-bearing terms instead of a short one.
-  const backfillSigRef = useRef<string>("");
+  // Auto-backfill ONCE per document: if, after volumes settle, the list is thin on real-volume
+  // terms, pull more keywords a single time. Bounded to one backfill per document open so it
+  // never loops or burns the keyword API on every keystroke or secondary change.
+  const didBackfillRef = useRef(false);
   useEffect(() => {
-    if (isVolumesLoading || isGeneratingMore) return;
-    const sig = keywords.map((k) => k.term).join("|");
-    if (sig === backfillSigRef.current) return; // already handled this analysis
-    backfillSigRef.current = sig;
+    if (didBackfillRef.current) return;
+    if (isVolumesLoading || isGeneratingMore || keywords.length === 0) return;
+    didBackfillRef.current = true;
     const volCount = [...keywords, ...extraKeywords].filter((k) => k.volume != null && k.volume > 0).length;
     if (volCount < 8) generateMoreKeywords();
     // eslint-disable-next-line react-hooks/exhaustive-deps
