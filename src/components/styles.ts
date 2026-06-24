@@ -45,6 +45,13 @@ export const INJECTED_CSS = `
   from { opacity: 0; transform: scale(0.95); }
   to { opacity: 1; transform: scale(1); }
 }
+@keyframes seo-copilot-sec-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1.5px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .seo-copilot-sec-circle { animation: none !important; }
+}
 .prose-chat { font-size: 12.5px; line-height: 1.65; color: #475569; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; }
 .prose-chat h1 { font-size: 14px; font-weight: 700; color: #1e293b; margin: 10px 0 5px 0; line-height: 1.35; }
 .prose-chat h2, .prose-chat h3 { font-size: 13px; font-weight: 700; color: #1e293b; margin: 10px 0 5px 0; line-height: 1.35; }
