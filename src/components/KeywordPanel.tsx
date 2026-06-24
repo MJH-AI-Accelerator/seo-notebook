@@ -459,7 +459,14 @@ function SuggestedKeywordsCard({
     placement: computePlacementClient(ek.term, text, documentFields),
     inContent: text.toLowerCase().includes(ek.term.toLowerCase()),
   }));
-  const allKeywords = [...sorted, ...liveExtras.filter((ek) => !sorted.some((s) => s.term.toLowerCase() === ek.term.toLowerCase()))];
+  const merged = [...sorted, ...liveExtras.filter((ek) => !sorted.some((s) => s.term.toLowerCase() === ek.term.toLowerCase()))];
+  // Hide N/A (no-search-volume) keywords entirely - editors only want terms with real volume.
+  // Two guards stop this from ever flashing an empty list: (1) while volumes are still loading
+  // every term reads as 0, so keep showing them until the lookup settles; (2) if NOTHING has
+  // volume (e.g. SEMrush failed, or a very niche topic) fall back to showing all of them.
+  const hasVol = (k: SuggestedKeyword) => k.volume != null && k.volume > 0;
+  const withVol = merged.filter(hasVol);
+  const allKeywords = isVolumesLoading || withVol.length === 0 ? merged : withVol;
   const visible = expanded ? allKeywords : allKeywords.slice(0, INITIAL_SHOW);
   const hiddenCount = allKeywords.length - INITIAL_SHOW;
 
@@ -533,6 +540,20 @@ function SuggestedKeywordsCard({
     } catch { /* silent */ }
     setIsGeneratingMore(false);
   };
+
+  // Auto-backfill: when the supporting list is thin on real-volume terms (on launch, and after
+  // a re-analysis such as choosing a secondary keyword), pull more keywords ONCE so the editor
+  // sees a full list of volume-bearing terms instead of a short one.
+  const backfillSigRef = useRef<string>("");
+  useEffect(() => {
+    if (isVolumesLoading || isGeneratingMore) return;
+    const sig = keywords.map((k) => k.term).join("|");
+    if (sig === backfillSigRef.current) return; // already handled this analysis
+    backfillSigRef.current = sig;
+    const volCount = [...keywords, ...extraKeywords].filter((k) => k.volume != null && k.volume > 0).length;
+    if (volCount < 8) generateMoreKeywords();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keywords, isVolumesLoading]);
 
   return (
     <div style={secSelecting
@@ -902,8 +923,13 @@ export function KeywordPanel({
     ...c,
     placement: computePlacementClient(c.term, text, documentFields),
   }));
+  // Hide N/A (no-search-volume) primary candidates once volumes load, same as the supporting
+  // list - but always keep at least one so the selector is never empty.
+  const candHasVol = (c: { volume: number | null }) => c.volume != null && c.volume > 0;
+  const candWithVol = candidates.filter(candHasVol);
+  const visibleCandidates = isVolumesLoading || candWithVol.length === 0 ? candidates : candWithVol;
 
-  const activeTerm = candidates.find((c) => c.term === selectedPrimaryTerm) ? selectedPrimaryTerm : candidates[0]?.term ?? "";
+  const activeTerm = visibleCandidates.find((c) => c.term === selectedPrimaryTerm) ? selectedPrimaryTerm : visibleCandidates[0]?.term ?? "";
 
   return (
     <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 12 }}>
@@ -917,7 +943,7 @@ export function KeywordPanel({
       {onSeedsChange && <SeedKeywordInput seeds={seedKeywords} onSeedsChange={onSeedsChange} />}
 
       <PrimaryKeywordSelector
-        candidates={candidates} selectedTerm={activeTerm}
+        candidates={visibleCandidates} selectedTerm={activeTerm}
         onSelect={(term: string) => { setSelectedPrimaryTerm(term); onSelectPrimary?.(term); }}
       />
 

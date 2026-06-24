@@ -25,12 +25,13 @@ export async function fetchAnalysis(
   seedKeywords?: string[],
   documentFields?: DocumentFields,
   focusKeyword?: string,
+  secondaryKeyword?: string,
   signal?: AbortSignal
 ): Promise<SEOAnalysis | DeepAnalysis> {
   const response = await fetch(`${apiUrl}/api/seo-copilot/analyze`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content, mode, publication, seedKeywords, documentFields, focusKeyword }),
+    body: JSON.stringify({ content, mode, publication, seedKeywords, documentFields, focusKeyword, secondaryKeyword }),
     signal,
   });
 
