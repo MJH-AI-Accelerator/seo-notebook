@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { LoadingBars } from "../LoadingBars";
 import { FeedbackButton } from "../FeedbackButton";
 import { ScoreDonut, ScoreDonutLegend } from "../ScoreDonut";
@@ -63,42 +62,29 @@ function LinkChip({ href, label, color }: { href: string; label: string; color: 
   );
 }
 
-// Copies the real link target to the clipboard so the editor can paste it into a
-// Sanity Control-K (Ctrl/Cmd+K) link annotation. We hand over the exact URL to insert,
-// one click away.
-function CopyLinkButton({ url }: { url: string }) {
-  const [copied, setCopied] = useState(false);
-  const color = copied ? "#16a34a" : MJH_BLUE;
+// At-a-glance status of whether this suggestion is a real, clickable link. Green when
+// we have a live reader URL the editor can actually link to; muted when there's no live
+// URL (the article can still be referenced inside Sanity, but it isn't directly clickable).
+function ClickableBadge({ clickable }: { clickable: boolean }) {
   return (
-    <button
-      type="button"
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(url);
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1800);
-        } catch {
-          /* clipboard blocked - the editor can still copy the URL from the Live site chip */
-        }
-      }}
-      aria-label={copied ? "Link copied to clipboard" : "Copy this link to paste with Ctrl+K"}
+    <span
       style={{
+        fontSize: 9,
+        fontWeight: 700,
+        textTransform: "uppercase",
+        letterSpacing: "0.04em",
+        padding: "2px 7px",
+        borderRadius: 99,
         display: "inline-flex",
         alignItems: "center",
         gap: 4,
-        padding: "3px 9px",
-        borderRadius: 99,
-        fontSize: 10.5,
-        fontWeight: 700,
-        color,
-        background: "rgba(255,255,255,0.7)",
-        border: `1px solid ${color}33`,
-        cursor: "pointer",
-        lineHeight: 1.2,
+        background: clickable ? "rgba(22,163,74,0.12)" : "rgba(0,0,0,0.05)",
+        color: clickable ? "#16a34a" : "#9ca3af",
       }}
     >
-      {copied ? "Copied!" : "Copy link"}
-    </button>
+      <span style={{ width: 5, height: 5, borderRadius: "50%", background: "currentColor" }} />
+      {clickable ? "Clickable link" : "No live link"}
+    </span>
   );
 }
 
@@ -374,6 +360,7 @@ export function LinkingTab({
                     {s.publishedAt && (
                       <span style={{ fontSize: 10, color: "#4b5563" }}>{formatDate(s.publishedAt)}</span>
                     )}
+                    <ClickableBadge clickable={!!liveUrl} />
                   </div>
                   <div style={{ fontSize: 12, fontWeight: 700, color: "#1f2937", lineHeight: 1.4, marginBottom: 2 }}>
                     {s.title}
@@ -414,14 +401,6 @@ export function LinkingTab({
                           {s.anchorReason}
                         </div>
                       )}
-                    </div>
-                  )}
-                  {liveUrl && (
-                    <div style={{ marginTop: 6, fontSize: 10, color: "#4b5563", lineHeight: 1.55, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
-                      <span>
-                        To add this link: select the text you want to link in your editor, press <strong>Ctrl+K</strong> (<strong>&#8984;K</strong> on Mac), and paste it.
-                      </span>
-                      <CopyLinkButton url={liveUrl} />
                     </div>
                   )}
                 </div>
