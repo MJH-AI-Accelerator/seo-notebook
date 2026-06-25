@@ -276,19 +276,9 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
       jumpTo: { tab: "technical", anchorId: "anchor-headings-structure" },
     });
   }
+  // (H1-in-body is intentionally no longer flagged: the article title IS the H1, and the
+  // Heading Outline on the Other Recs tab now shows it explicitly instead of warning.)
   if (headingsDetailed) {
-    const bodyH1 = headingsDetailed.filter((h) => h.level === 1).length;
-    if (bodyH1 > 0) {
-      items.push({
-        id: "headings-h1-in-body",
-        category: "headings",
-        severity: "warning",
-        label: "H1 inside the body",
-        description: `${bodyH1} H1 heading${bodyH1 === 1 ? "" : "s"} in the body of the article.`,
-        howToFix: "The article title is your H1. Body headings should start at H2 so the outline isn't ambiguous.",
-        jumpTo: { tab: "technical", anchorId: "anchor-headings-structure" },
-      });
-    }
     let prevLevel = 0;
     let skips = 0;
     for (const h of headingsDetailed) {

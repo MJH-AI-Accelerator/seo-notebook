@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { LoadingBars } from "../LoadingBars";
 import { FeedbackButton } from "../FeedbackButton";
 import { ScoreDonut, ScoreDonutLegend } from "../ScoreDonut";
@@ -59,6 +60,45 @@ function LinkChip({ href, label, color }: { href: string; label: string; color: 
         <path d="M4.75 4.5A2.75 2.75 0 002 7.25v8A2.75 2.75 0 004.75 18h8A2.75 2.75 0 0015.5 15.25v-3a.75.75 0 00-1.5 0v3c0 .69-.56 1.25-1.25 1.25h-8c-.69 0-1.25-.56-1.25-1.25v-8c0-.69.56-1.25 1.25-1.25h3a.75.75 0 000-1.5h-3z" />
       </svg>
     </a>
+  );
+}
+
+// Copies the real link target to the clipboard so the editor can paste it into a
+// Sanity Control-K (Ctrl/Cmd+K) link annotation. We hand over the exact URL to insert,
+// one click away.
+function CopyLinkButton({ url }: { url: string }) {
+  const [copied, setCopied] = useState(false);
+  const color = copied ? "#16a34a" : MJH_BLUE;
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(url);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1800);
+        } catch {
+          /* clipboard blocked - the editor can still copy the URL from the Live site chip */
+        }
+      }}
+      aria-label={copied ? "Link copied to clipboard" : "Copy this link to paste with Ctrl+K"}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        padding: "3px 9px",
+        borderRadius: 99,
+        fontSize: 10.5,
+        fontWeight: 700,
+        color,
+        background: "rgba(255,255,255,0.7)",
+        border: `1px solid ${color}33`,
+        cursor: "pointer",
+        lineHeight: 1.2,
+      }}
+    >
+      {copied ? "Copied!" : "Copy link"}
+    </button>
   );
 }
 
@@ -306,7 +346,9 @@ export function LinkingTab({
 
         {suggestions.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {suggestions.map((s) => (
+            {suggestions.map((s) => {
+              const liveUrl = buildLiveUrl(publication, s.slug);
+              return (
               <div
                 key={s._id}
                 style={{
@@ -339,15 +381,11 @@ export function LinkingTab({
                   <div style={{ fontSize: 10, color: "#4b5563", fontFamily: "ui-monospace, SFMono-Regular, monospace", marginBottom: 6 }}>
                     /{s.slug}
                   </div>
-                  {(() => {
-                    const liveUrl = buildLiveUrl(publication, s.slug);
-                    if (!liveUrl) return null;
-                    return (
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 6 }}>
-                        <LinkChip href={liveUrl} label="Live site" color="#4b5563" />
-                      </div>
-                    );
-                  })()}
+                  {liveUrl && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 6 }}>
+                      <LinkChip href={liveUrl} label="Live site" color="#4b5563" />
+                    </div>
+                  )}
                   {s.relevanceReason && (
                     <div style={{ fontSize: 11, color: "#1f2937", marginBottom: 6, lineHeight: 1.45 }}>
                       <span style={{ fontWeight: 700, color: "#4b5563" }}>Why it fits:</span>{" "}
@@ -378,6 +416,14 @@ export function LinkingTab({
                       )}
                     </div>
                   )}
+                  {liveUrl && (
+                    <div style={{ marginTop: 6, fontSize: 10, color: "#4b5563", lineHeight: 1.55, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+                      <span>
+                        To add this link: select the text you want to link in your editor, press <strong>Ctrl+K</strong> (<strong>&#8984;K</strong> on Mac), and paste it.
+                      </span>
+                      <CopyLinkButton url={liveUrl} />
+                    </div>
+                  )}
                 </div>
                 <div style={{ flexShrink: 0 }}>
                   <FeedbackButton
@@ -388,7 +434,8 @@ export function LinkingTab({
                   />
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

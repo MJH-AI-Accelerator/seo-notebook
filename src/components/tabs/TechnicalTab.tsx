@@ -279,7 +279,12 @@ function imageTitleAudit(titles: string[], imageCount: number): TechnicalAuditIt
   };
 }
 
-function computeHeadingStructureAudits(headings: HeadingItem[], wordCount: number): TechnicalAuditItem[] {
+function computeHeadingStructureAudits(
+  headings: HeadingItem[],
+  wordCount: number,
+  primaryKeyword?: string,
+  secondaryKeyword?: string
+): TechnicalAuditItem[] {
   const audits: TechnicalAuditItem[] = [];
   // Count H2 AND H3 as section headings: an article sectioned only with H3s is
   // still sectioned, so it shouldn't be told it has "no section headings". Mirrors
@@ -322,20 +327,13 @@ function computeHeadingStructureAudits(headings: HeadingItem[], wordCount: numbe
         label: "Heading Structure",
         value: "No headings in body",
         status: "warning",
-        recommendation: "Add H2 headings to break the article into scannable sections.",
+        recommendation: "Consider adding H2-H6 subheadings to structure the article into scannable sections.",
       });
     }
     return audits;
   }
-  const h1s = headings.filter((h) => h.level === 1);
-  if (h1s.length > 0) {
-    audits.push({
-      label: "H1 in body",
-      value: `${h1s.length} H1 heading${h1s.length === 1 ? "" : "s"} in the body`,
-      status: "warning",
-      recommendation: "The article title is your H1. Body headings should start at H2 so the outline isn't ambiguous.",
-    });
-  }
+  // (No "H1 in body" warning. The article title IS the page H1, and the Heading Outline
+  // below now shows it explicitly - so a stray body H1 is displayed there, not scolded.)
   let prevLevel = 0;
   const skips: { from: number; to: number; at: string }[] = [];
   for (const h of headings) {
@@ -367,6 +365,27 @@ function computeHeadingStructureAudits(headings: HeadingItem[], wordCount: numbe
       status: "good",
     });
   }
+
+  // Keyword-in-headings nudge (separate from structural health). Reinforce relevance by
+  // working the primary and/or secondary keyword into at least one subheading. Only fires
+  // when subheadings actually exist - otherwise the "no headings" / density notes cover it.
+  const subheads = headings.filter((h) => h.level >= 2);
+  const subheadingText = subheads.map((h) => h.text).join("  ");
+  const hasPrimaryInHeads = primaryKeyword ? containsKeywordTokens(subheadingText, primaryKeyword) : false;
+  const hasSecondaryInHeads = secondaryKeyword ? containsKeywordTokens(subheadingText, secondaryKeyword) : false;
+  if (subheads.length > 0 && (primaryKeyword || secondaryKeyword) && !hasPrimaryInHeads && !hasSecondaryInHeads) {
+    const kw = [
+      primaryKeyword ? `primary keyword "${primaryKeyword}"` : "",
+      secondaryKeyword ? `secondary keyword "${secondaryKeyword}"` : "",
+    ].filter(Boolean).join(" or ");
+    audits.push({
+      label: "Keywords in Headings",
+      value: "No subheading uses your target keyword",
+      status: "warning",
+      recommendation: `Work your ${kw} into at least one H2 or H3. Keywords in headers reinforce relevance for readers and search engines.`,
+    });
+  }
+
   return audits;
 }
 
@@ -537,7 +556,7 @@ export function TechnicalTab({
   const headingsDetailed = documentFields?.headingsDetailed;
   const headingsForStructure: HeadingItem[] = headingsDetailed ?? headings.map((t) => ({ text: t, level: 2 }));
   const wordCount = text ? text.split(/\s+/).filter(Boolean).length : 0;
-  const structureAudits = useMemo(() => computeHeadingStructureAudits(headingsForStructure, wordCount), [headingsForStructure, wordCount]);
+  const structureAudits = useMemo(() => computeHeadingStructureAudits(headingsForStructure, wordCount, primaryKeyword, secondaryKeyword), [headingsForStructure, wordCount, primaryKeyword, secondaryKeyword]);
 
   const imageNames = documentFields?.imageNames || [];
   const { filenames: imageFilenames, altTexts: imageAltTexts } = useMemo(
@@ -602,23 +621,40 @@ export function TechnicalTab({
         <AuditCard key={`structure-${i}`} anchorId={i === 0 ? "anchor-headings-structure" : undefined} label={a.label} value={a.value} status={a.status} recommendation={a.recommendation} />
       ))}
 
-      {headings.length > 0 && (
+      {(headings.length > 0 || !!documentFields?.title) && (
         <div id="anchor-headings-outline" style={{ ...cardStyle, padding: "8px 14px" }}>
           <div style={{ fontSize: 10, color: "#4b5563", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600, marginBottom: 6 }}>
             Heading Outline
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {(headingsDetailed ? headingsDetailed.slice(0, 12) : headings.slice(0, 12).map((h) => ({ text: h, level: 2 }))).map((h, i) => (
-              <div key={i} style={{
-                fontSize: 11, color: h.text ? "#4b5563" : "#dc2626",
-                fontStyle: h.text ? "normal" : "italic", lineHeight: 1.4,
-                paddingLeft: Math.max(0, (h.level - 2) * 12),
-              }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: "#4b5563", marginRight: 6 }}>H{h.level}</span>
-                {h.text || "(empty)"}
+            {/* The article title renders as the page H1 - show it first so editors can see
+                exactly what their H1 is, then the body headings the tool scanned below it. */}
+            {documentFields?.title && (
+              <div style={{ fontSize: 11, color: MJH_BLUE, fontWeight: 700, lineHeight: 1.4 }}>
+                <span style={{ fontSize: 9, fontWeight: 700, color: MJH_BLUE, marginRight: 6 }}>H1</span>
+                {documentFields.title}
+                <span style={{ fontSize: 9, color: "#6b7280", fontWeight: 500, marginLeft: 6 }}>(article title)</span>
               </div>
-            ))}
+            )}
+            {(headingsDetailed ? headingsDetailed.slice(0, 12) : headings.slice(0, 12).map((h) => ({ text: h, level: 2 }))).map((h, i) => {
+              const isH1 = h.level === 1;
+              return (
+                <div key={i} style={{
+                  fontSize: 11,
+                  color: !h.text ? "#dc2626" : isH1 ? MJH_BLUE : "#4b5563",
+                  fontWeight: isH1 ? 700 : 400,
+                  fontStyle: h.text ? "normal" : "italic", lineHeight: 1.4,
+                  paddingLeft: Math.max(0, (h.level - 2) * 12),
+                }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: isH1 ? MJH_BLUE : "#4b5563", marginRight: 6 }}>H{h.level}</span>
+                  {h.text || "(empty)"}
+                </div>
+              );
+            })}
             {headings.length > 12 && <div style={{ fontSize: 10, color: "#4b5563" }}>+ {headings.length - 12} more</div>}
+          </div>
+          <div style={{ fontSize: 10, color: "#6b7280", marginTop: 8, lineHeight: 1.4 }}>
+            Your H1 is the article title; the tool scans the H2-H6 tags below it. Tip: work your primary and/or secondary keyword into a header where it reads naturally.
           </div>
         </div>
       )}

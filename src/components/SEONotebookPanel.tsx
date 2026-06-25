@@ -14,6 +14,7 @@ import { MetaTab } from "./tabs/MetaTab";
 import { TechnicalTab } from "./tabs/TechnicalTab";
 import { INJECTED_CSS, MJH_GOLD, MJH_SLATE, PANEL_BG, CHAT_ZONE_BG, RECS_ZONE_BG } from "./styles";
 import { OnboardingInfoButton, OnboardingCard } from "./OnboardingPopup";
+import { ReportProblemButton } from "./ReportProblemButton";
 import { fetchLinkingSuggestions, fetchContentSuggestions, checkLinks } from "../lib/api";
 import type { DocumentFields, TabId, LinkingSuggestion, SummaryItem, ContentSuggestions, LinkCheckResult } from "../lib/types";
 
@@ -523,6 +524,7 @@ export function SEONotebookPanel({ text, documentFields, documentId }: SEONotebo
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: MJH_GOLD, animation: "content-pulse 2s ease-in-out infinite" }} />
           )}
           <OnboardingInfoButton onClick={openPopupPersistent} />
+          <ReportProblemButton activeTab={activeTab} documentId={documentId} primaryKeyword={effectivePrimary} />
         </div>
         <div
           style={{
