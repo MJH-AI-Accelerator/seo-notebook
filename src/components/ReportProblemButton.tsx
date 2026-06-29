@@ -80,20 +80,25 @@ export function ReportProblemButton({ activeTab, documentId, primaryKeyword }: R
         aria-label="Report a problem"
         title="Report a problem"
         style={{
-          background: open ? "rgba(0,93,172,0.08)" : "none",
-          border: "none",
-          borderRadius: 6,
-          cursor: "pointer",
-          padding: 2,
-          display: "flex",
+          display: "inline-flex",
           alignItems: "center",
-          color: open ? MJH_BLUE : "#9ca3af",
-          transition: "color 150ms",
+          gap: 4,
+          padding: "3px 8px",
+          borderRadius: 99,
+          border: `1px solid ${open ? MJH_BLUE : "#d1d5db"}`,
+          background: open ? "rgba(0,93,172,0.08)" : "rgba(255,255,255,0.6)",
+          cursor: "pointer",
+          fontSize: 10,
+          fontWeight: 600,
+          color: open ? MJH_BLUE : "#6b7280",
+          whiteSpace: "nowrap",
+          transition: "all 150ms",
         }}
       >
-        <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+        <svg width="11" height="11" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
           <path d="M3 2.75a.75.75 0 00-1.5 0v14.5a.75.75 0 001.5 0v-4.392l1.657-.348a6.449 6.449 0 014.271.572 7.948 7.948 0 005.965.524l2.078-.64A.75.75 0 0017.5 12.25v-8.5a.75.75 0 00-.904-.734l-1.74.348a7.948 7.948 0 01-5.965-.524 6.449 6.449 0 00-4.271-.572L3 2.842V2.75z" />
         </svg>
+        Report a problem
       </button>
 
       {open && (
