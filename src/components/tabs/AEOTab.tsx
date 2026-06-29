@@ -153,9 +153,9 @@ export function AEOTab({
         }}
       >
         <span style={{ fontWeight: 700, color: AEO_PURPLE }}>Keep it fresh. </span>
-        If you update this article after it&apos;s published, set the <strong>Updated on</strong> date
-        in Sanity. It surfaces the piece in <strong>Latest Updated Articles</strong> and tells search
-        engines and AI answer engines the content is current - both improve visibility.
+        Planning to update this article after it&apos;s published? Set the <strong>Updated on</strong> date
+        in Sanity (e.g. &ldquo;Updated: February 19, 2026&rdquo;). It surfaces the article in
+        <strong> Latest Updated Articles</strong> and increases its visibility in search engine results.
       </div>
 
       {aeoContentChanged && (

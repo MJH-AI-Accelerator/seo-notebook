@@ -158,6 +158,7 @@ function freshnessChip(label: LinkingSuggestion["freshnessLabel"], score: number
     "very-old": { bg: "rgba(220,38,38,0.1)", color: "#dc2626", text: "Very old" },
   } as const;
   const c = map[label];
+  if (!c) return null; // guard an unexpected freshnessLabel (parity with the plugin)
   return (
     <span
       style={{

@@ -105,6 +105,10 @@ export interface DocumentFields {
   authorCredentials?: string;
   authorBioUrl?: string;
   authorIsReference?: boolean;
+  // Fact-checker / reviewer (mirrors the plugin type). Not populated by the Notebook's
+  // plain-text editor, but kept here so the shared DocumentFields shape stays in sync.
+  factCheckerName?: string;
+  factCheckerIsReference?: boolean;
   publishedAt?: string;
   updatedAt?: string;
   lastReviewedAt?: string;

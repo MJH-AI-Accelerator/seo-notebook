@@ -308,6 +308,26 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
         jumpTo: { tab: "technical", anchorId: "anchor-headings-structure" },
       });
     }
+    // Keyword-in-headings opportunity - mirrors the "Keywords in Headings" audit on the
+    // Other Recs tab so the nudge also surfaces in the Summary hub. Only when subheadings
+    // exist and neither target keyword appears in any of them.
+    const subheads = headingsDetailed.filter((h) => h.level >= 2);
+    if (subheads.length > 0 && (primaryKeyword || secondaryKeyword)) {
+      const subText = subheads.map((h) => h.text).join("  ");
+      const hasP = primaryKeyword ? containsKeywordTokens(subText, primaryKeyword) : false;
+      const hasS = secondaryKeyword ? containsKeywordTokens(subText, secondaryKeyword) : false;
+      if (!hasP && !hasS) {
+        items.push({
+          id: "headings-keyword-missing",
+          category: "headings",
+          severity: "opportunity",
+          label: "Keyword missing from subheadings",
+          description: "No H2/H3 subheading uses your primary or secondary keyword.",
+          howToFix: "Work your primary or secondary keyword into at least one subheading - keywords in headers reinforce relevance for readers and search.",
+          jumpTo: { tab: "technical", anchorId: "anchor-headings-structure" },
+        });
+      }
+    }
   }
 
   // ---------- IMAGES ----------
