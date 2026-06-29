@@ -389,153 +389,146 @@ function computeHeadingStructureAudits(
   return audits;
 }
 
-function StatTile({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <div style={{ padding: "8px 4px", background: "rgba(0,0,0,0.025)", borderRadius: 8, textAlign: "center" }}>
-      <div style={{ fontSize: 18, fontWeight: 700, color, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: 9, fontWeight: 700, color: "#4b5563", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 4 }}>{label}</div>
-    </div>
-  );
-}
-
-function LinkIssueRow({ result }: { result: LinkCheckResult }) {
+// Small health badge for a checked URL (OK / 301 / 404 / BLOCKED ...).
+function HealthBadge({ result }: { result: LinkCheckResult }) {
   const map = {
-    ok: { bg: "rgba(22,163,74,0.06)", color: "#16a34a", label: "OK" },
-    redirect: { bg: "rgba(230,192,27,0.12)", color: "#8B7310", label: result.status > 0 ? String(result.status) : "REDIR" },
-    broken: { bg: "rgba(220,38,38,0.06)", color: "#dc2626", label: result.status > 0 ? String(result.status) : "404" },
-    unverified: { bg: "rgba(245,158,11,0.10)", color: "#b45309", label: result.status > 0 ? String(result.status) : "BLOCKED" },
-    error: { bg: "rgba(220,38,38,0.06)", color: "#dc2626", label: "ERR" },
+    ok: { color: "#16a34a", label: "OK" },
+    redirect: { color: "#8B7310", label: result.status > 0 ? String(result.status) : "REDIR" },
+    broken: { color: "#dc2626", label: result.status > 0 ? String(result.status) : "404" },
+    unverified: { color: "#b45309", label: result.status > 0 ? String(result.status) : "BLOCKED" },
+    error: { color: "#dc2626", label: "ERR" },
   } as const;
   const c = map[result.category];
-  const tooltip = result.category === "unverified"
-    ? `${result.url} (couldn't auto-check; likely anti-bot blocking - open manually to verify)`
-    : result.error ? `${result.url} (${result.error})` : result.url;
   return (
-    <a
-      href={result.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      style={{
-        display: "flex", alignItems: "center", gap: 8, padding: "6px 10px",
-        background: c.bg, borderRadius: 6, textDecoration: "none",
-      }}
-    >
-      <span style={{
-        fontSize: 9, fontWeight: 700, letterSpacing: "0.04em",
-        padding: "2px 6px", borderRadius: 99, background: "#ffffff", color: c.color,
-        fontVariantNumeric: "tabular-nums", flexShrink: 0,
-      }}>
-        {c.label}
-      </span>
-      <span
-        style={{
-          fontSize: 11, color: "#1f2937",
-          fontFamily: "ui-monospace, SFMono-Regular, monospace",
-          flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}
-        title={tooltip}
-      >
-        {result.url}
-      </span>
-    </a>
+    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.04em", padding: "2px 6px", borderRadius: 99, background: "#ffffff", color: c.color, fontVariantNumeric: "tabular-nums", flexShrink: 0, marginTop: 1 }}>
+      {c.label}
+    </span>
   );
 }
 
-function LinkCheckCard({ urls, results, isLoading, error, hasRun, onCheck }: { urls: string[]; results: LinkCheckResult[]; isLoading: boolean; error: string | null; hasRun: boolean; onCheck: () => void }) {
-  const counts = useMemo(() => {
-    const total = results.length;
-    const valid = results.filter((r) => r.category === "ok").length;
-    const redirects = results.filter((r) => r.category === "redirect").length;
-    const broken = results.filter((r) => r.category === "broken").length;
-    const errored = results.filter((r) => r.category === "error").length;
-    const unverified = results.filter((r) => r.category === "unverified").length;
-    const issues = results.filter((r) => r.category !== "ok");
-    return { total, valid, redirects, broken, errored, unverified, issues };
-  }, [results]);
+function LinkCheckCard({
+  urls,
+  linksDetailed,
+  results,
+  isLoading,
+  error,
+  hasRun,
+  onCheck,
+}: {
+  urls: string[];
+  linksDetailed?: { url: string; hyperlinked: boolean; anchorText?: string }[];
+  results: LinkCheckResult[];
+  isLoading: boolean;
+  error: string | null;
+  hasRun: boolean;
+  onCheck: () => void;
+}) {
+  const [openBucket, setOpenBucket] = useState<string | null>(null);
+  const haveTypes = !!linksDetailed;
+  const detailByUrl = useMemo(() => new Map((linksDetailed || []).map((d) => [d.url, d])), [linksDetailed]);
+  const resultByUrl = useMemo(() => new Map(results.map((r) => [r.url, r])), [results]);
+
+  const tiles = useMemo(() => {
+    const t: { key: string; label: string; color: string; urls: string[]; note?: string }[] = [];
+    if (haveTypes) {
+      const hyper = (linksDetailed || []).filter((l) => l.hyperlinked).map((l) => l.url);
+      const plain = (linksDetailed || []).filter((l) => !l.hyperlinked).map((l) => l.url);
+      t.push({ key: "hyperlinked", label: "Hyperlinked", color: "#16a34a", urls: hyper });
+      t.push({ key: "plain", label: "Plain text", color: "#b45309", urls: plain, note: "Not links yet - hyperlink these so readers can click them and search engines can follow them." });
+    }
+    if (hasRun) {
+      t.push({ key: "valid", label: "Valid", color: "#16a34a", urls: results.filter((r) => r.category === "ok").map((r) => r.url) });
+      t.push({ key: "redirects", label: "Redirects", color: "#8B7310", urls: results.filter((r) => r.category === "redirect").map((r) => r.url) });
+      t.push({ key: "broken", label: "Broken", color: "#dc2626", urls: results.filter((r) => r.category === "broken" || r.category === "error").map((r) => r.url) });
+      const blocked = results.filter((r) => r.category === "unverified").map((r) => r.url);
+      if (blocked.length) t.push({ key: "blocked", label: "Blocked", color: "#b45309", urls: blocked, note: "Couldn't auto-check these (likely anti-bot rules) - open each to confirm." });
+    }
+    return t;
+  }, [haveTypes, linksDetailed, hasRun, results]);
+
+  const open = tiles.find((t) => t.key === openBucket) || null;
+
+  const renderLinkRow = (url: string) => {
+    const d = detailByUrl.get(url);
+    const r = resultByUrl.get(url);
+    return (
+      <a key={url} href={url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "6px 8px", background: "rgba(0,0,0,0.025)", borderRadius: 6, textDecoration: "none", marginTop: 4 }}>
+        {r && <HealthBadge result={r} />}
+        <div style={{ minWidth: 0, flex: 1 }}>
+          {d?.anchorText && (
+            <div style={{ fontSize: 11, color: "#1f2937", fontWeight: 600, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>&ldquo;{d.anchorText}&rdquo;</div>
+          )}
+          <div style={{ fontSize: 10, color: "#4b5563", fontFamily: "ui-monospace, SFMono-Regular, monospace", wordBreak: "break-all", lineHeight: 1.35 }}>{url}</div>
+        </div>
+      </a>
+    );
+  };
 
   return (
     <div id="anchor-link-check" style={cardStyle}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
-        <span style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", color: "#4b5563", fontWeight: 600 }}>
-          Link Health
-        </span>
+        <span style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", color: "#4b5563", fontWeight: 600 }}>Link Health</span>
         {hasRun && !isLoading && (
           <button onClick={onCheck} style={{ background: "none", border: "none", fontSize: 10, fontWeight: 600, color: MJH_BLUE, cursor: "pointer", padding: "2px 4px" }} title="Run again">Re-check</button>
         )}
       </div>
 
-      <div style={{ fontSize: 11, color: "#1f2937", lineHeight: 1.5, marginBottom: 10 }}>
-        {urls.length === 0
-          ? "No external links found in the body."
-          : `${urls.length} link${urls.length === 1 ? "" : "s"} found in the body.`}
-      </div>
-
-      {urls.length > 0 && !hasRun && !isLoading && (
-        <button onClick={onCheck} style={{
-          width: "100%", padding: "8px 12px", fontSize: 11, fontWeight: 700,
-          color: "#1f2937", background: MJH_GOLD, border: "none", borderRadius: 6, cursor: "pointer", letterSpacing: "0.01em",
-        }}>
-          Check {urls.length} link{urls.length === 1 ? "" : "s"} for 404s
-        </button>
-      )}
-
-      {isLoading && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "16px 0" }}>
-          <LoadingBars size="xs" color={MJH_BLUE} />
-          <span style={{ fontSize: 11, color: "#4b5563" }}>Checking {urls.length} link{urls.length === 1 ? "" : "s"}...</span>
-        </div>
-      )}
-
-      {error && !isLoading && (
-        <div style={{
-          padding: "10px 12px", background: "rgba(220,38,38,0.04)",
-          border: "1px solid rgba(220,38,38,0.18)", borderRadius: 8,
-          fontSize: 11, color: "#b91c1c", lineHeight: 1.5,
-        }}>
-          {error}
-          <button onClick={onCheck} style={{
-            display: "block", marginTop: 6, padding: "4px 10px",
-            fontSize: 11, fontWeight: 700, color: "#ffffff", background: "#dc2626",
-            border: "none", borderRadius: 5, cursor: "pointer",
-          }}>Try again</button>
-        </div>
-      )}
-
-      {hasRun && !isLoading && !error && (
+      {urls.length === 0 ? (
+        <div style={{ fontSize: 11, color: "#4b5563", lineHeight: 1.5 }}>No links found in the body.</div>
+      ) : (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: counts.unverified > 0 ? "repeat(5, 1fr)" : "repeat(4, 1fr)", gap: 6 }}>
-            <StatTile label="Checked" value={counts.total} color="#475569" />
-            <StatTile label="Valid" value={counts.valid} color="#16a34a" />
-            <StatTile label="Redirects" value={counts.redirects} color="#8B7310" />
-            <StatTile label="Broken" value={counts.broken + counts.errored} color="#dc2626" />
-            {counts.unverified > 0 && (
-              <StatTile label="Blocked" value={counts.unverified} color="#b45309" />
-            )}
+          <div style={{ fontSize: 11, color: "#4b5563", lineHeight: 1.5, marginBottom: 10 }}>
+            {urls.length} link{urls.length === 1 ? "" : "s"} in the body.{tiles.length > 0 ? " Tap a box to see which." : ""}
           </div>
-          {counts.unverified > 0 && (
-            <div style={{
-              marginTop: 8, padding: "6px 10px",
-              background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)",
-              borderRadius: 6, fontSize: 10.5, color: "#92400e", lineHeight: 1.45,
-            }}>
-              {counts.unverified} link{counts.unverified === 1 ? "" : "s"} were blocked from our auto-check (likely
-              anti-bot rules on the destination site). They may still work fine for human readers - click each to confirm.
+
+          {tiles.length > 0 && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+              {tiles.map((t) => {
+                const active = openBucket === t.key;
+                const empty = t.urls.length === 0;
+                return (
+                  <button
+                    key={t.key}
+                    type="button"
+                    onClick={() => !empty && setOpenBucket(active ? null : t.key)}
+                    aria-expanded={active}
+                    aria-label={`${t.urls.length} ${t.label} links`}
+                    style={{ padding: "8px 4px", background: active ? "rgba(0,93,172,0.08)" : "rgba(0,0,0,0.025)", border: active ? `1px solid ${MJH_BLUE}55` : "1px solid transparent", borderRadius: 8, textAlign: "center", cursor: empty ? "default" : "pointer", opacity: empty ? 0.5 : 1 }}
+                  >
+                    <div style={{ fontSize: 18, fontWeight: 700, color: t.color, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{t.urls.length}</div>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: "#4b5563", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: 4 }}>{t.label}</div>
+                  </button>
+                );
+              })}
             </div>
           )}
-          {counts.issues.length > 0 ? (
-            <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: "#4b5563", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                {counts.issues.length} link{counts.issues.length === 1 ? "" : "s"} need{counts.issues.length === 1 ? "s" : ""} attention
-              </div>
-              {counts.issues.map((r) => <LinkIssueRow key={r.url} result={r} />)}
+
+          {open && open.urls.length > 0 && (
+            <div style={{ marginTop: 8 }}>
+              {open.note && (
+                <div style={{ fontSize: 10.5, color: "#92400e", background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 6, padding: "6px 9px", lineHeight: 1.45, marginBottom: 2 }}>{open.note}</div>
+              )}
+              {open.urls.map(renderLinkRow)}
             </div>
-          ) : (
-            <div style={{
-              marginTop: 12, padding: "8px 10px",
-              background: "rgba(22,163,74,0.05)", border: "1px solid rgba(22,163,74,0.15)",
-              borderRadius: 8, fontSize: 11, color: "#16a34a", fontWeight: 600, textAlign: "center",
-            }}>
-              All {counts.total} link{counts.total === 1 ? "" : "s"} resolve cleanly.
+          )}
+
+          {!hasRun && !isLoading && (
+            <button onClick={onCheck} style={{ width: "100%", marginTop: 10, padding: "8px 12px", fontSize: 11, fontWeight: 700, color: "#1f2937", background: MJH_GOLD, border: "none", borderRadius: 6, cursor: "pointer", letterSpacing: "0.01em" }}>
+              Check {urls.length} link{urls.length === 1 ? "" : "s"} for broken / redirects
+            </button>
+          )}
+
+          {isLoading && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "16px 0" }}>
+              <LoadingBars size="xs" color={MJH_BLUE} />
+              <span style={{ fontSize: 11, color: "#4b5563" }}>Checking {urls.length} link{urls.length === 1 ? "" : "s"}...</span>
+            </div>
+          )}
+
+          {error && !isLoading && (
+            <div style={{ marginTop: 10, padding: "10px 12px", background: "rgba(220,38,38,0.04)", border: "1px solid rgba(220,38,38,0.18)", borderRadius: 8, fontSize: 11, color: "#b91c1c", lineHeight: 1.5 }}>
+              {error}
+              <button onClick={onCheck} style={{ display: "block", marginTop: 6, padding: "4px 10px", fontSize: 11, fontWeight: 700, color: "#ffffff", background: "#dc2626", border: "none", borderRadius: 5, cursor: "pointer" }}>Try again</button>
             </div>
           )}
         </>
