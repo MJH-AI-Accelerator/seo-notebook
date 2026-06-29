@@ -274,6 +274,25 @@ export function MetaTab({ documentFields, primaryKeyword, secondaryKeyword, isLo
 
   return (
     <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+      {/* "Keep it fresh" notice pinned at the very top (moved here from the AEO tab). */}
+      <div
+        style={{
+          padding: "9px 12px",
+          background: "rgba(0,93,172,0.05)",
+          border: "1px solid rgba(0,93,172,0.15)",
+          borderLeft: `3px solid ${MJH_BLUE}`,
+          borderRadius: 8,
+          fontSize: 11,
+          color: "#1f2937",
+          lineHeight: 1.5,
+        }}
+      >
+        <span style={{ fontWeight: 700, color: MJH_BLUE }}>Keep it fresh. </span>
+        Planning to update this article after it&apos;s published? Set the <strong>Updated on</strong> date in Sanity
+        (e.g. &ldquo;Updated: February 19, 2026&rdquo;). It surfaces the article in <strong>Latest Updated Articles</strong> and
+        increases its visibility in search engine results.
+      </div>
+
       {!documentFields && (
         <div style={{ ...cardStyle, textAlign: "center" }}>
           <span style={{ fontSize: 12, color: "#4b5563" }}>Waiting for document content...</span>

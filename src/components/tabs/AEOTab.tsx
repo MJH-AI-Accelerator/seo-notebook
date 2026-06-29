@@ -137,26 +137,7 @@ export function AEOTab({
       {/* The AI-generated disclaimer lives at the panel level (above the tab bar)
           so every tab inherits it - no per-tab repetition. */}
 
-      {/* Freshness / "Updated on" visibility nudge. AI answer engines and Google both
-          favor recently-updated pages, and on MJH sites a set "Updated on" date also
-          surfaces the article in the "Latest Updated Articles" rail. */}
-      <div
-        style={{
-          padding: "9px 12px",
-          background: "rgba(0,93,172,0.05)",
-          border: "1px solid rgba(0,93,172,0.15)",
-          borderLeft: `3px solid ${AEO_PURPLE}`,
-          borderRadius: 8,
-          fontSize: 11,
-          color: "#1f2937",
-          lineHeight: 1.5,
-        }}
-      >
-        <span style={{ fontWeight: 700, color: AEO_PURPLE }}>Keep it fresh. </span>
-        Planning to update this article after it&apos;s published? Set the <strong>Updated on</strong> date
-        in Sanity (e.g. &ldquo;Updated: February 19, 2026&rdquo;). It surfaces the article in
-        <strong> Latest Updated Articles</strong> and increases its visibility in search engine results.
-      </div>
+      {/* The "Keep it fresh" / Updated-on notice now lives at the top of the Meta tab. */}
 
       {aeoContentChanged && (
         <div onClick={runDeepAnalysis} style={{
