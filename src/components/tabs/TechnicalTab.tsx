@@ -428,21 +428,19 @@ function LinkCheckCard({
   const detailByUrl = useMemo(() => new Map((linksDetailed || []).map((d) => [d.url, d])), [linksDetailed]);
   const resultByUrl = useMemo(() => new Map(results.map((r) => [r.url, r])), [results]);
 
+  // Paired tiles (see plugin): Working/Broken (health) + Linked/Not-linked (type). Interleaved
+  // so a 2-column grid stacks opposites. "Working" includes redirects.
+  const blockedUrls = results.filter((r) => r.category === "unverified").map((r) => r.url);
   const tiles = useMemo(() => {
+    const hyper = (linksDetailed || []).filter((l) => l.hyperlinked).map((l) => l.url);
+    const plain = (linksDetailed || []).filter((l) => !l.hyperlinked).map((l) => l.url);
+    const working = results.filter((r) => r.category === "ok" || r.category === "redirect").map((r) => r.url);
+    const broken = results.filter((r) => r.category === "broken" || r.category === "error").map((r) => r.url);
     const t: { key: string; label: string; color: string; urls: string[]; note?: string }[] = [];
-    if (haveTypes) {
-      const hyper = (linksDetailed || []).filter((l) => l.hyperlinked).map((l) => l.url);
-      const plain = (linksDetailed || []).filter((l) => !l.hyperlinked).map((l) => l.url);
-      t.push({ key: "hyperlinked", label: "Hyperlinked", color: "#16a34a", urls: hyper });
-      t.push({ key: "plain", label: "Plain text", color: "#b45309", urls: plain, note: "Not links yet - hyperlink these so readers can click them and search engines can follow them." });
-    }
-    if (hasRun) {
-      t.push({ key: "valid", label: "Valid", color: "#16a34a", urls: results.filter((r) => r.category === "ok").map((r) => r.url) });
-      t.push({ key: "redirects", label: "Redirects", color: "#8B7310", urls: results.filter((r) => r.category === "redirect").map((r) => r.url) });
-      t.push({ key: "broken", label: "Broken", color: "#dc2626", urls: results.filter((r) => r.category === "broken" || r.category === "error").map((r) => r.url) });
-      const blocked = results.filter((r) => r.category === "unverified").map((r) => r.url);
-      if (blocked.length) t.push({ key: "blocked", label: "Blocked", color: "#b45309", urls: blocked, note: "Couldn't auto-check these (likely anti-bot rules) - open each to confirm." });
-    }
+    if (hasRun) t.push({ key: "working", label: "Working", color: "#16a34a", urls: working });
+    if (haveTypes) t.push({ key: "linked", label: "Linked", color: "#16a34a", urls: hyper });
+    if (hasRun) t.push({ key: "broken", label: "Broken", color: "#dc2626", urls: broken });
+    if (haveTypes) t.push({ key: "notlinked", label: "Not linked", color: "#dc2626", urls: plain, note: "Not links yet - hyperlink these so readers can click them and search engines can follow them." });
     return t;
   }, [haveTypes, linksDetailed, hasRun, results]);
 
@@ -482,7 +480,7 @@ function LinkCheckCard({
           </div>
 
           {tiles.length > 0 && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 6 }}>
               {tiles.map((t) => {
                 const empty = t.urls.length === 0;
                 const active = openBucket === t.key && !empty;
@@ -509,6 +507,12 @@ function LinkCheckCard({
                 <div style={{ fontSize: 10.5, color: "#92400e", background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 6, padding: "6px 9px", lineHeight: 1.45, marginBottom: 2 }}>{open.note}</div>
               )}
               {open.urls.map(renderLinkRow)}
+            </div>
+          )}
+
+          {hasRun && blockedUrls.length > 0 && (
+            <div style={{ marginTop: 8, padding: "6px 10px", background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 6, fontSize: 10.5, color: "#92400e", lineHeight: 1.45 }}>
+              {blockedUrls.length} link{blockedUrls.length === 1 ? "" : "s"} couldn&apos;t be auto-checked (the destination blocks our checker) - open them to confirm.
             </div>
           )}
 
@@ -608,6 +612,16 @@ export function TechnicalTab({
         footer={<SlugRedirectNotice />}
       />
 
+      {/* Link Health sits right under URL Slug - both are about the page's links. */}
+      <LinkCheckCard
+        urls={bodyLinks}
+        results={linkCheckResults}
+        isLoading={isLinkCheckLoading}
+        error={linkCheckError}
+        hasRun={hasRunLinkCheck}
+        onCheck={onCheckLinks}
+      />
+
       {wordAudit && <AuditCard anchorId="anchor-word-count" label={wordAudit.label} value={wordAudit.value} status={wordAudit.status} recommendation={wordAudit.recommendation} />}
 
       {structureAudits.map((a, i) => (
@@ -664,15 +678,6 @@ export function TechnicalTab({
       {imgTitleAudit && (
         <AuditCard anchorId="anchor-image-titles" label={imgTitleAudit.label} value={imgTitleAudit.value} status={imgTitleAudit.status} recommendation={imgTitleAudit.recommendation} />
       )}
-
-      <LinkCheckCard
-        urls={bodyLinks}
-        results={linkCheckResults}
-        isLoading={isLinkCheckLoading}
-        error={linkCheckError}
-        hasRun={hasRunLinkCheck}
-        onCheck={onCheckLinks}
-      />
     </div>
   );
 }

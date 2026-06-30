@@ -80,9 +80,9 @@ export function calculateContentScoreDetailed(content: string, analysis: SEOAnal
         detail = `Primary keyword over-used at ${density.toFixed(2)}% density - reduce to 0.5-2.5%`;
       }
     }
-    components.push({ label: "Primary keyword", points: pts, max: 25, detail });
+    components.push({ label: "Primary keyword usage", points: pts, max: 25, detail });
   } else {
-    components.push({ label: "Primary keyword", points: 0, max: 25, detail: "No primary keyword identified yet" });
+    components.push({ label: "Primary keyword usage", points: 0, max: 25, detail: "No primary keyword identified yet" });
   }
 
   // 2. Supporting keyword coverage (up to 25)
@@ -92,13 +92,13 @@ export function calculateContentScoreDetailed(content: string, analysis: SEOAnal
     const coverageRatio = inContentCount / supportingKws.length;
     const pts = Math.round(coverageRatio * 25);
     components.push({
-      label: "Supporting keywords",
+      label: "Supporting keyword coverage",
       points: pts,
       max: 25,
       detail: `${inContentCount} of ${supportingKws.length} supporting keywords present (${Math.round(coverageRatio * 100)}%)`,
     });
   } else {
-    components.push({ label: "Supporting keywords", points: 0, max: 25, detail: "No supporting keywords yet" });
+    components.push({ label: "Supporting keyword coverage", points: 0, max: 25, detail: "No supporting keywords yet" });
   }
 
   // 3. Word count (up to 15)

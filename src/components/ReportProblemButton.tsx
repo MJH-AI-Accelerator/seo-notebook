@@ -137,7 +137,7 @@ export function ReportProblemButton({ activeTab, documentId, primaryKeyword }: R
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); handleSubmit(); }
                 }}
-                placeholder="What happened? (a screenshot helps too - email it to us)"
+                placeholder="What happened? The more detail, the better."
                 rows={4}
                 maxLength={4000}
                 style={{
