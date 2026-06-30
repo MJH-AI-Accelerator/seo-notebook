@@ -55,7 +55,7 @@ export function ReportProblemButton({ activeTab, documentId, primaryKeyword }: R
           surface: "seo-notebook",
           activeTab,
           primaryKeyword: primaryKeyword || undefined,
-          url: typeof window !== "undefined" ? window.location.href.slice(0, 500) : undefined,
+          url: typeof window !== "undefined" && /^https?:\/\//i.test(window.location.href) ? window.location.href.slice(0, 500) : undefined,
           userAgent: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 500) : undefined,
           timestamp: new Date().toISOString(),
         },
@@ -76,7 +76,7 @@ export function ReportProblemButton({ activeTab, documentId, primaryKeyword }: R
     <div style={{ position: "relative", display: "flex" }}>
       <button
         type="button"
-        onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
+        onClick={(e) => { e.stopPropagation(); if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; } setOpen((o) => !o); }}
         aria-label="Report a problem"
         title="Report a problem"
         style={{

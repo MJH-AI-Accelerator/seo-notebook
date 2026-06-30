@@ -324,7 +324,7 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
           label: "Keyword missing from subheadings",
           description: "No H2/H3 subheading uses your primary or secondary keyword.",
           howToFix: "Work your primary or secondary keyword into at least one subheading - keywords in headers reinforce relevance for readers and search.",
-          jumpTo: { tab: "technical", anchorId: "anchor-headings-structure" },
+          jumpTo: { tab: "technical", anchorId: "anchor-headings-keyword" },
         });
       }
     }

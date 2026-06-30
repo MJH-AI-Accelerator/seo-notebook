@@ -258,6 +258,9 @@ export function LinkingTab({
         {isStale && suggestions.length > 0 && !isLoading && (
           <div
             onClick={onRefresh}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onRefresh(); } }}
             style={{
               display: "flex",
               alignItems: "center",
@@ -350,10 +353,10 @@ export function LinkingTab({
               >
                 <ScoreDonut
                   size={64}
-                  topic={s.topicScore}
-                  freshness={s.freshnessScore}
-                  sectionFit={s.sectionFitScore}
-                  composite={s.compositeScore}
+                  topic={Math.max(0, Math.min(100, s.topicScore))}
+                  freshness={Math.max(0, Math.min(100, s.freshnessScore))}
+                  sectionFit={Math.max(0, Math.min(100, s.sectionFitScore))}
+                  composite={Math.max(0, Math.min(100, s.compositeScore))}
                 />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3, flexWrap: "wrap" }}>

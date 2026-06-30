@@ -188,7 +188,7 @@ function imageFilenameAudit(filenames: string[]): TechnicalAuditItem | null {
     const words = base.split("-").filter(Boolean);
     if (words.length < 2) {
       issues.push({ filename: f, reason: "single word - use 2-3 descriptive hyphenated words" });
-    } else if (words.length > 7) {
+    } else if (words.length > 5) {
       issues.push({ filename: f, reason: "too many words - keep to 3-5" });
     }
   }
@@ -220,7 +220,7 @@ function imageAltTextAudit(altTexts: string[]): TechnicalAuditItem | null {
     audited++;
     const len = trimmed.length;
     const wc = trimmed.split(/\s+/).filter(Boolean).length;
-    if (len > 125) {
+    if (len >= 125) {
       issues.push({ alt: trimmed, reason: `${len} chars - shorten to under 125` });
     } else if (wc < 2) {
       issues.push({ alt: trimmed, reason: "just one word - use 2-5 descriptive keywords" });
@@ -484,8 +484,8 @@ function LinkCheckCard({
           {tiles.length > 0 && (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
               {tiles.map((t) => {
-                const active = openBucket === t.key;
                 const empty = t.urls.length === 0;
+                const active = openBucket === t.key && !empty;
                 return (
                   <button
                     key={t.key}
@@ -611,7 +611,7 @@ export function TechnicalTab({
       {wordAudit && <AuditCard anchorId="anchor-word-count" label={wordAudit.label} value={wordAudit.value} status={wordAudit.status} recommendation={wordAudit.recommendation} />}
 
       {structureAudits.map((a, i) => (
-        <AuditCard key={`structure-${i}`} anchorId={i === 0 ? "anchor-headings-structure" : undefined} label={a.label} value={a.value} status={a.status} recommendation={a.recommendation} />
+        <AuditCard key={`structure-${i}`} anchorId={a.label === "Keywords in Headings" ? "anchor-headings-keyword" : i === 0 ? "anchor-headings-structure" : undefined} label={a.label} value={a.value} status={a.status} recommendation={a.recommendation} />
       ))}
 
       {(headings.length > 0 || !!documentFields?.title) && (
@@ -644,7 +644,7 @@ export function TechnicalTab({
                 </div>
               );
             })}
-            {headings.length > 12 && <div style={{ fontSize: 10, color: "#4b5563" }}>+ {headings.length - 12} more</div>}
+            {(headingsDetailed ?? headings).length > 12 && <div style={{ fontSize: 10, color: "#4b5563" }}>+ {(headingsDetailed ?? headings).length - 12} more</div>}
           </div>
           <div style={{ fontSize: 10, color: "#6b7280", marginTop: 8, lineHeight: 1.4 }}>
             The title above is your H1. The tool scans your H2-H6 tags below it - work your primary and/or secondary keyword into the title and at least one subheading where it reads naturally.
