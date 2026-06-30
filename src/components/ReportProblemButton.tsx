@@ -60,8 +60,10 @@ export function ReportProblemButton({ activeTab, documentId, primaryKeyword }: R
           timestamp: new Date().toISOString(),
         },
       });
-    } catch {
-      /* silent - reporting a problem must never itself throw at the editor */
+    } catch (e) {
+      // Never surface a failure at the editor (the save is best-effort), but log it so ops
+      // isn't blind to a degraded endpoint.
+      console.error("[SEO Copilot] failed to send problem report:", e);
     }
     setSubmitting(false);
     setSubmitted(true);

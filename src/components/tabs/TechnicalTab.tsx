@@ -637,9 +637,12 @@ export function TechnicalTab({
 
       {wordAudit && <AuditCard anchorId="anchor-word-count" label={wordAudit.label} value={wordAudit.value} status={wordAudit.status} recommendation={wordAudit.recommendation} />}
 
-      {structureAudits.map((a, i) => (
-        <AuditCard key={`structure-${i}`} anchorId={a.label === "Keywords in Headings" ? "anchor-headings-keyword" : i === 0 ? "anchor-headings-structure" : undefined} label={a.label} value={a.value} status={a.status} recommendation={a.recommendation} />
-      ))}
+      {(() => {
+        const structIdx = structureAudits.findIndex((a) => a.label !== "Keywords in Headings" && a.label !== "Looks Like a Heading");
+        return structureAudits.map((a, i) => (
+          <AuditCard key={`structure-${i}`} anchorId={a.label === "Keywords in Headings" ? "anchor-headings-keyword" : a.label === "Looks Like a Heading" ? "anchor-headings-unstyled" : i === structIdx ? "anchor-headings-structure" : undefined} label={a.label} value={a.value} status={a.status} recommendation={a.recommendation} />
+        ));
+      })()}
 
       {(headings.length > 0 || !!documentFields?.title) && (
         <div id="anchor-headings-outline" style={{ ...cardStyle, padding: "8px 14px" }}>
