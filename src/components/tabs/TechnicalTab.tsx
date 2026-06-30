@@ -283,7 +283,8 @@ function computeHeadingStructureAudits(
   headings: HeadingItem[],
   wordCount: number,
   primaryKeyword?: string,
-  secondaryKeyword?: string
+  secondaryKeyword?: string,
+  unstyledHeadings?: string[]
 ): TechnicalAuditItem[] {
   const audits: TechnicalAuditItem[] = [];
   // Count H2 AND H3 as section headings: an article sectioned only with H3s is
@@ -319,6 +320,18 @@ function computeHeadingStructureAudits(
       recommendation: "Articles above 1,500 words usually need at least 3 named sections. Add section breaks so the outline is scannable.",
     });
     densityFired = true;
+  }
+
+  // Lines that look like headings but were typed as plain text - nudge to style as H2.
+  if (unstyledHeadings && unstyledHeadings.length > 0) {
+    const n = unstyledHeadings.length;
+    const examples = unstyledHeadings.slice(0, 2).map((t) => `"${t}"`).join(", ");
+    audits.push({
+      label: "Looks Like a Heading",
+      value: `${n} line${n === 1 ? "" : "s"} read${n === 1 ? "s" : ""} like a heading but ${n === 1 ? "isn't" : "aren't"} styled`,
+      status: "warning",
+      recommendation: `${examples}${n > 2 ? ", and more," : ""} ${n === 1 ? "looks" : "look"} like a section heading typed as plain text. In Sanity, select the line and apply the "Heading 2" style so it counts as a real heading.`,
+    });
   }
 
   if (headings.length === 0) {

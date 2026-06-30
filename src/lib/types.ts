@@ -97,6 +97,9 @@ export interface DocumentFields {
   imageCount?: number;
   headings?: string[];
   headingsDetailed?: HeadingItem[];
+  // Body paragraphs that look like section headings but were typed as plain text. Populated
+  // only where the body is Portable Text (the Sanity plugin); the Notebook leaves it unset.
+  unstyledHeadings?: string[];
   bodyLinks?: string[];
   contentCategory?: string;
   contentPlacement?: string[];
