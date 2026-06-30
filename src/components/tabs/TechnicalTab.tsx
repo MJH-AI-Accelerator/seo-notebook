@@ -661,7 +661,9 @@ export function TechnicalTab({
             {(headingsDetailed ?? headings).length > 12 && <div style={{ fontSize: 10, color: "#4b5563" }}>+ {(headingsDetailed ?? headings).length - 12} more</div>}
           </div>
           <div style={{ fontSize: 10, color: "#6b7280", marginTop: 8, lineHeight: 1.4 }}>
-            The title above is your H1. The tool scans your H2-H6 tags below it - work your primary and/or secondary keyword into the title and at least one subheading where it reads naturally.
+            {headings.length > 0
+              ? "The title above is your H1; the tool scans the H2-H6 tags below it. Tip: work your primary and/or secondary keyword into a header where it reads naturally."
+              : "The title above is your H1, and there are no H2-H6 subheadings yet. Tip: work your primary and/or secondary keyword into the title where it reads naturally."}
           </div>
         </div>
       )}
