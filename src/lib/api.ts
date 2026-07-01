@@ -90,11 +90,13 @@ export async function submitFeedback(
   apiUrl: string,
   data: { suggestion_type: string; suggestion_text: string; vote: "up" | "down"; document_id?: string; publication?: string; user_id?: string; context?: FeedbackContext }
 ): Promise<void> {
-  await fetch(`${apiUrl}/api/seo-copilot/feedback`, {
+  const res = await fetch(`${apiUrl}/api/seo-copilot/feedback`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
+  // Surface HTTP failures so the caller can show a real error instead of a false "Thanks".
+  if (!res.ok) throw new Error(`Feedback submit failed: HTTP ${res.status}`);
 }
 
 export async function lookupKeywords(

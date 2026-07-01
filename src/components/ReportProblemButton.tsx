@@ -21,11 +21,13 @@ export function ReportProblemButton({ activeTab, documentId, primaryKeyword }: R
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [failed, setFailed] = useState(false);
   const popRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mounted = useRef(true);
 
-  useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current); }, []);
+  useEffect(() => () => { mounted.current = false; if (closeTimer.current) clearTimeout(closeTimer.current); }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -43,6 +45,7 @@ export function ReportProblemButton({ activeTab, documentId, primaryKeyword }: R
   const handleSubmit = async () => {
     const trimmed = text.trim();
     if (!trimmed || submitting) return;
+    setFailed(false);
     setSubmitting(true);
     try {
       await submitFeedback(apiUrl, {
@@ -61,13 +64,16 @@ export function ReportProblemButton({ activeTab, documentId, primaryKeyword }: R
         },
       });
     } catch (e) {
-      // Never surface a failure at the editor (the save is best-effort), but log it so ops
-      // isn't blind to a degraded endpoint.
+      // Show a real error + keep the box open so the report isn't silently lost. Log it too.
       console.error("[SEO Copilot] failed to send problem report:", e);
+      if (mounted.current) { setSubmitting(false); setFailed(true); }
+      return;
     }
+    if (!mounted.current) return;
     setSubmitting(false);
     setSubmitted(true);
     closeTimer.current = setTimeout(() => {
+      if (!mounted.current) return;
       setOpen(false);
       setSubmitted(false);
       setText("");
@@ -132,6 +138,11 @@ export function ReportProblemButton({ activeTab, documentId, primaryKeyword }: R
               <div style={{ fontSize: 10.5, color: "#6b7280", marginBottom: 8, lineHeight: 1.45 }}>
                 Beta - tell us what went wrong. We also note which tab you&apos;re on to help us track it down.
               </div>
+              {failed && (
+                <div style={{ fontSize: 10.5, color: "#dc2626", marginBottom: 8, lineHeight: 1.45, fontWeight: 600 }}>
+                  Couldn&apos;t send - please try again.
+                </div>
+              )}
               <textarea
                 ref={textareaRef}
                 value={text}
