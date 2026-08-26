@@ -8,6 +8,7 @@ import { FeedbackButton } from "./FeedbackButton";
 import { LoadingBars } from "./LoadingBars";
 import { MJH_GOLD, MJH_BLUE } from "./styles";
 import type { PrimaryKeywordCandidate, DocumentFields, KeywordPlacement } from "../lib/types";
+import { jsonHeaders } from "../lib/apiKey";
 
 interface KeywordPanelProps {
   text: string;
@@ -410,7 +411,7 @@ function SuggestedKeywordsCard({
         : undefined;
       const res = await fetch(`${apiUrl}/api/seo-copilot/keyword-help`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: jsonHeaders(),
         // Clip to 5,000 chars: the backend only reads the first 4,000 anyway, so sending
         // the full article needlessly bloats the request on long pieces.
         body: JSON.stringify({ keyword: term, content: text.slice(0, 5000), publication, previousSuggestions }),
@@ -503,7 +504,7 @@ function SuggestedKeywordsCard({
     try {
       const res = await fetch(`${apiUrl}/api/seo-copilot/keywords`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: jsonHeaders(),
         body: JSON.stringify({ keywords: [trimmed] }),
       });
       if (res.ok) {
@@ -526,7 +527,7 @@ function SuggestedKeywordsCard({
       const existingTerms = allKeywords.map((kw) => kw.term);
       const res = await fetch(`${apiUrl}/api/seo-copilot/more-keywords`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: jsonHeaders(),
         body: JSON.stringify({ content: text, existingKeywords: existingTerms, publication }),
       });
       if (res.ok) {

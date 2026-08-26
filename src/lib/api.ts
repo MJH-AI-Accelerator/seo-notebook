@@ -1,4 +1,5 @@
 import type { SEOAnalysis, DeepAnalysis, ChatMessage, DocumentFields, ContentSuggestions, InternalLink, LinkingSuggestion, LinkCheckResult } from "./types";
+import { authHeaders, jsonHeaders } from "./apiKey";
 
 function safeParseJson<T>(text: string): T {
   try {
@@ -30,7 +31,7 @@ export async function fetchAnalysis(
 ): Promise<SEOAnalysis | DeepAnalysis> {
   const response = await fetch(`${apiUrl}/api/seo-copilot/analyze`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders(),
     body: JSON.stringify({ content, mode, publication, seedKeywords, documentFields, focusKeyword, secondaryKeyword }),
     signal,
   });
@@ -61,7 +62,7 @@ export async function fetchChatStream(
 ): Promise<ReadableStream<Uint8Array> | null> {
   const response = await fetch(`${apiUrl}/api/seo-copilot/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders(),
     body: JSON.stringify({ messages, documentContext, publication, keywordPanelData }),
   });
 
@@ -79,7 +80,7 @@ export async function submitFeedback(
 ): Promise<void> {
   await fetch(`${apiUrl}/api/seo-copilot/feedback`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders(),
     body: JSON.stringify(data),
   });
 }
@@ -91,7 +92,7 @@ export async function lookupKeywords(
 ): Promise<{ results: { keyword: string; volume: number; cpc: number; competition: number }[]; apiUnitsUsed: number }> {
   const response = await fetch(`${apiUrl}/api/seo-copilot/keywords`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders(),
     body: JSON.stringify({ keywords }),
     signal,
   });
@@ -110,7 +111,7 @@ export async function fetchQuestions(
 ): Promise<{ questions: { question: string; volume: number; cpc: number; competition: number }[]; apiUnitsUsed: number }> {
   const response = await fetch(`${apiUrl}/api/seo-copilot/questions`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders(),
     body: JSON.stringify({ keyword }),
   });
 
@@ -129,7 +130,8 @@ export async function loadChatHistory(
 ): Promise<ChatMessage[]> {
   try {
     const res = await fetch(
-      `${apiUrl}/api/seo-copilot/chat-history?userId=${encodeURIComponent(userId)}&documentId=${encodeURIComponent(documentId)}`
+      `${apiUrl}/api/seo-copilot/chat-history?userId=${encodeURIComponent(userId)}&documentId=${encodeURIComponent(documentId)}`,
+      { headers: authHeaders() }
     );
     if (!res.ok) return [];
     const data = await res.json();
@@ -149,7 +151,7 @@ export async function fetchContentSuggestions(
   try {
     const res = await fetch(`${apiUrl}/api/seo-copilot/content-suggestions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: jsonHeaders(),
       body: JSON.stringify({ content, primaryKeyword, publication }),
     });
     if (!res.ok) return empty;
@@ -175,7 +177,7 @@ export async function fetchInternalLinks(
   try {
     const res = await fetch(`${apiUrl}/api/seo-copilot/articles`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: jsonHeaders(),
       body: JSON.stringify({ action: "related", keywords, publication }),
     });
     if (!res.ok) return [];
@@ -221,7 +223,7 @@ export async function fetchLinkingSuggestions(
   try {
     const res = await fetch(`${apiUrl}/api/seo-copilot/linking-suggestions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: jsonHeaders(),
       body: JSON.stringify({ content, primaryKeyword, supportingKeywords, currentDocumentId, publication }),
     });
     if (!res.ok) return [];
@@ -240,7 +242,7 @@ export async function checkLinks(apiUrl: string, urls: string[]): Promise<LinkCh
   try {
     const res = await fetch(`${apiUrl}/api/seo-copilot/check-links`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: jsonHeaders(),
       body: JSON.stringify({ urls }),
     });
     if (!res.ok) return [];
@@ -262,7 +264,7 @@ export async function saveChatHistory(
   try {
     await fetch(`${apiUrl}/api/seo-copilot/chat-history`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: jsonHeaders(),
       body: JSON.stringify({ userId, documentId, messages, publication }),
     });
   } catch {
