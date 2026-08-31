@@ -3,6 +3,80 @@
 import { useMemo } from "react";
 import type { DocumentFields, TechnicalAuditItem } from "../../lib/types";
 import { containsKeywordTokens } from "../../lib/utils";
+import { MJH_BLUE } from "../styles";
+
+// Google's own page documenting E-E-A-T (Experience, Expertise, Authoritativeness, Trust).
+const GOOGLE_EEAT_URL = "https://developers.google.com/search/docs/fundamentals/creating-helpful-content#eat";
+
+interface ChecklistItem {
+  label: string;
+  why: string;
+  link?: { href: string; label: string };
+}
+
+// E-E-A-T / structured fields that live in the Sanity article, not in this drafting tool.
+// The Notebook (like the Word add-in) can't read live Sanity author/date/fact-checker
+// fields, so we surface them as a "set these in Sanity" reminder. Carries the director's
+// asks for this surface: the Google E-E-A-T link, the fact-checker recommendation, and
+// the "Updated on" freshness nudge.
+const SANITY_CHECKLIST: ChecklistItem[] = [
+  {
+    label: "Author + credentials",
+    why: "A named author with credentials (MD, PharmD, RN) - a critical E-E-A-T signal for healthcare.",
+    link: { href: GOOGLE_EEAT_URL, label: "Google's E-E-A-T guidelines" },
+  },
+  {
+    label: "Fact-checker",
+    why: 'Add a second named person as a fact-checker, separate from the author. A visible "Fact checked by" line is a strong trust signal for healthcare content.',
+  },
+  {
+    label: "Publish / update dates",
+    why: 'A visible, recent date. After you revise a published piece, set the "Updated on" date so it surfaces in Latest Updated Articles and increases search visibility.',
+  },
+];
+
+function SanityChecklistCard() {
+  return (
+    <div style={cardStyle}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
+        Set These in Sanity Before Publishing
+      </div>
+      <div style={{ fontSize: 10.5, color: "#6b7280", lineHeight: 1.45, marginBottom: 10 }}>
+        These structured fields live in the Sanity article, not here. Complete them in Sanity Studio when you publish.
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+        {SANITY_CHECKLIST.map((item) => (
+          <div key={item.label} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#cbd5e1", marginTop: 5, flexShrink: 0 }} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 11.5, fontWeight: 600, color: "#374151" }}>{item.label}</span>
+                <span style={{ fontSize: 8.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", padding: "1px 6px", borderRadius: 99, background: "rgba(0,93,172,0.1)", color: MJH_BLUE }}>
+                  In Sanity
+                </span>
+              </div>
+              <div style={{ fontSize: 10.5, color: "#6b7280", lineHeight: 1.45, marginTop: 1 }}>{item.why}</div>
+              {item.link && (
+                <a
+                  href={item.link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4, fontSize: 10.5, fontWeight: 700, color: MJH_BLUE, textDecoration: "none" }}
+                >
+                  {item.link.label}
+                  <svg width="9" height="9" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path d="M12.5 2a.75.75 0 000 1.5h2.44l-6.97 6.97a.75.75 0 101.06 1.06L16 4.56V7a.75.75 0 001.5 0V2.75A.75.75 0 0016.75 2H12.5z" />
+                    <path d="M4.75 4.5A2.75 2.75 0 002 7.25v8A2.75 2.75 0 004.75 18h8A2.75 2.75 0 0015.5 15.25v-3a.75.75 0 00-1.5 0v3c0 .69-.56 1.25-1.25 1.25h-8c-.69 0-1.25-.56-1.25-1.25v-8c0-.69.56-1.25 1.25-1.25h3a.75.75 0 000-1.5h-3z" />
+                  </svg>
+                </a>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 interface MetaTabProps {
   documentFields?: DocumentFields;
@@ -200,6 +274,25 @@ export function MetaTab({ documentFields, primaryKeyword, secondaryKeyword, isLo
 
   return (
     <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+      {/* "Keep it fresh" notice pinned at the very top (moved here from the AEO tab). */}
+      <div
+        style={{
+          padding: "9px 12px",
+          background: "rgba(0,93,172,0.05)",
+          border: "1px solid rgba(0,93,172,0.15)",
+          borderLeft: `3px solid ${MJH_BLUE}`,
+          borderRadius: 8,
+          fontSize: 11,
+          color: "#1f2937",
+          lineHeight: 1.5,
+        }}
+      >
+        <span style={{ fontWeight: 700, color: MJH_BLUE }}>Keep it fresh. </span>
+        Planning to update this article after it&apos;s published? Set the <strong>Updated on</strong> date in Sanity
+        (e.g. &ldquo;Updated: February 19, 2026&rdquo;). It surfaces the article in <strong>Latest Updated Articles</strong> and
+        increases its visibility in search engine results.
+      </div>
+
       {!documentFields && (
         <div style={{ ...cardStyle, textAlign: "center" }}>
           <span style={{ fontSize: 12, color: "#4b5563" }}>Waiting for document content...</span>
@@ -216,6 +309,8 @@ export function MetaTab({ documentFields, primaryKeyword, secondaryKeyword, isLo
           recommendation={a.recommendation}
         />
       ))}
+
+      <SanityChecklistCard />
     </div>
   );
 }

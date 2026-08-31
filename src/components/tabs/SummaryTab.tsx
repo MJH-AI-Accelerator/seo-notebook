@@ -60,13 +60,23 @@ function scoreColors(score: number): { bg: string; text: string; label: string }
   return { bg: "rgba(220,38,38,0.08)", text: "#dc2626", label: "Needs work" };
 }
 
-// The score card. The breakdown is ALWAYS visible - the score is just a roll-up
-// of the six visible components below it. No hidden state, no "click to see why".
+// Qualitative tier for a single score component. We deliberately show a word + color,
+// not "points / max" - the underlying numbers are coarse heuristics, and a precise-looking
+// "17 / 25" implies an accuracy the rubric doesn't actually have.
+function componentTier(pct: number): { label: string; color: string; bar: string } {
+  if (pct >= 75) return { label: "Strong", color: "#16a34a", bar: "#16a34a" };
+  if (pct >= 40) return { label: "OK", color: "#8B7310", bar: "#E6C01B" };
+  return { label: "Low", color: "#dc2626", bar: "#dc2626" };
+}
+
+// The score card. The breakdown is ALWAYS visible - the overall tier is just a roll-up
+// of the components below it. No raw numbers: each row reads as a colored "vibe" (Strong /
+// OK / Low) so editors focus on what's weak, not on chasing an arbitrary point total.
 function ScoreBadge({ score, breakdown }: { score: number; breakdown: ContentScore["components"] }) {
   const c = scoreColors(score);
   return (
     <div style={cardStyle}>
-      {/* Top row: number + label */}
+      {/* Top row: qualitative tier + label (no number) */}
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         <div
           style={{
@@ -75,42 +85,38 @@ function ScoreBadge({ score, breakdown }: { score: number; breakdown: ContentSco
             borderRadius: "50%",
             background: c.bg,
             display: "flex",
-            flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
             flexShrink: 0,
-            lineHeight: 1,
           }}
         >
-          <span style={{ fontSize: 20, fontWeight: 700, color: c.text }}>{score}</span>
-          <span style={{ fontSize: 8, fontWeight: 700, color: c.text, opacity: 0.7, letterSpacing: "0.06em", marginTop: 2 }}>
-            / 100
-          </span>
+          {/* Solid status disc - a color cue, not a number */}
+          <div style={{ width: 22, height: 22, borderRadius: "50%", background: c.text, opacity: 0.9 }} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", color: "#4b5563", fontWeight: 600, marginBottom: 2 }}>
             Content Score
           </div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: c.text }}>{c.label}</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: c.text }}>{c.label}</div>
         </div>
       </div>
 
-      {/* Always-visible breakdown - each row shows what's driving the score */}
+      {/* Always-visible breakdown - each row shows what's driving the score, as a vibe */}
       {breakdown.length > 0 && (
         <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
           {breakdown.map((comp, i) => {
             const pct = comp.max > 0 ? (comp.points / comp.max) * 100 : 0;
-            const barColor = pct >= 75 ? "#16a34a" : pct >= 40 ? "#E6C01B" : "#dc2626";
+            const tier = componentTier(pct);
             return (
               <div key={i}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 3 }}>
                   <span style={{ fontSize: 11, fontWeight: 600, color: "#1f2937" }}>{comp.label}</span>
-                  <span style={{ fontSize: 11, color: "#4b5563", fontVariantNumeric: "tabular-nums" }}>
-                    {comp.points} / {comp.max}
+                  <span style={{ fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: tier.color }}>
+                    {tier.label}
                   </span>
                 </div>
                 <div style={{ height: 4, background: "#f1f5f9", borderRadius: 99, overflow: "hidden", marginBottom: 4 }}>
-                  <div style={{ width: `${pct}%`, height: "100%", background: barColor, transition: "width 200ms" }} />
+                  <div style={{ width: `${pct}%`, height: "100%", background: tier.bar, transition: "width 200ms" }} />
                 </div>
                 <div style={{ fontSize: 10.5, color: "#4b5563", lineHeight: 1.4 }}>{comp.detail}</div>
               </div>

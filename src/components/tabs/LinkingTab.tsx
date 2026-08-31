@@ -62,6 +62,32 @@ function LinkChip({ href, label, color }: { href: string; label: string; color: 
   );
 }
 
+// At-a-glance status of whether this suggestion is a real, clickable link. Green when
+// we have a live reader URL the editor can actually link to; muted when there's no live
+// URL (the article can still be referenced inside Sanity, but it isn't directly clickable).
+function ClickableBadge({ clickable }: { clickable: boolean }) {
+  return (
+    <span
+      style={{
+        fontSize: 9,
+        fontWeight: 700,
+        textTransform: "uppercase",
+        letterSpacing: "0.04em",
+        padding: "2px 7px",
+        borderRadius: 99,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        background: clickable ? "rgba(22,163,74,0.12)" : "rgba(0,0,0,0.05)",
+        color: clickable ? "#16a34a" : "#9ca3af",
+      }}
+    >
+      <span style={{ width: 5, height: 5, borderRadius: "50%", background: "currentColor" }} />
+      {clickable ? "Clickable link" : "No live link"}
+    </span>
+  );
+}
+
 const cardStyle: React.CSSProperties = {
   borderRadius: 14,
   background: "rgba(255,255,255,0.55)",
@@ -132,6 +158,7 @@ function freshnessChip(label: LinkingSuggestion["freshnessLabel"], score: number
     "very-old": { bg: "rgba(220,38,38,0.1)", color: "#dc2626", text: "Very old" },
   } as const;
   const c = map[label];
+  if (!c) return null; // guard an unexpected freshnessLabel (parity with the plugin)
   return (
     <span
       style={{
@@ -231,6 +258,9 @@ export function LinkingTab({
         {isStale && suggestions.length > 0 && !isLoading && (
           <div
             onClick={onRefresh}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onRefresh(); } }}
             style={{
               display: "flex",
               alignItems: "center",
@@ -306,7 +336,9 @@ export function LinkingTab({
 
         {suggestions.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {suggestions.map((s) => (
+            {suggestions.map((s) => {
+              const liveUrl = buildLiveUrl(publication, s.slug);
+              return (
               <div
                 key={s._id}
                 style={{
@@ -321,10 +353,10 @@ export function LinkingTab({
               >
                 <ScoreDonut
                   size={64}
-                  topic={s.topicScore}
-                  freshness={s.freshnessScore}
-                  sectionFit={s.sectionFitScore}
-                  composite={s.compositeScore}
+                  topic={Math.max(0, Math.min(100, s.topicScore))}
+                  freshness={Math.max(0, Math.min(100, s.freshnessScore))}
+                  sectionFit={Math.max(0, Math.min(100, s.sectionFitScore))}
+                  composite={Math.max(0, Math.min(100, s.compositeScore))}
                 />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3, flexWrap: "wrap" }}>
@@ -332,6 +364,7 @@ export function LinkingTab({
                     {s.publishedAt && (
                       <span style={{ fontSize: 10, color: "#4b5563" }}>{formatDate(s.publishedAt)}</span>
                     )}
+                    <ClickableBadge clickable={!!liveUrl} />
                   </div>
                   <div style={{ fontSize: 12, fontWeight: 700, color: "#1f2937", lineHeight: 1.4, marginBottom: 2 }}>
                     {s.title}
@@ -339,15 +372,11 @@ export function LinkingTab({
                   <div style={{ fontSize: 10, color: "#4b5563", fontFamily: "ui-monospace, SFMono-Regular, monospace", marginBottom: 6 }}>
                     /{s.slug}
                   </div>
-                  {(() => {
-                    const liveUrl = buildLiveUrl(publication, s.slug);
-                    if (!liveUrl) return null;
-                    return (
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 6 }}>
-                        <LinkChip href={liveUrl} label="Live site" color="#4b5563" />
-                      </div>
-                    );
-                  })()}
+                  {liveUrl && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 6 }}>
+                      <LinkChip href={liveUrl} label="Live site" color="#4b5563" />
+                    </div>
+                  )}
                   {s.relevanceReason && (
                     <div style={{ fontSize: 11, color: "#1f2937", marginBottom: 6, lineHeight: 1.45 }}>
                       <span style={{ fontWeight: 700, color: "#4b5563" }}>Why it fits:</span>{" "}
@@ -388,7 +417,8 @@ export function LinkingTab({
                   />
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

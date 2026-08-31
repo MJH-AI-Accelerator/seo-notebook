@@ -137,6 +137,8 @@ export function AEOTab({
       {/* The AI-generated disclaimer lives at the panel level (above the tab bar)
           so every tab inherits it - no per-tab repetition. */}
 
+      {/* The "Keep it fresh" / Updated-on notice now lives at the top of the Meta tab. */}
+
       {aeoContentChanged && (
         <div onClick={runDeepAnalysis} style={{
           padding: "8px 12px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8,

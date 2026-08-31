@@ -188,7 +188,7 @@ function imageFilenameAudit(filenames: string[]): TechnicalAuditItem | null {
     const words = base.split("-").filter(Boolean);
     if (words.length < 2) {
       issues.push({ filename: f, reason: "single word - use 2-3 descriptive hyphenated words" });
-    } else if (words.length > 7) {
+    } else if (words.length > 5) {
       issues.push({ filename: f, reason: "too many words - keep to 3-5" });
     }
   }
@@ -220,7 +220,7 @@ function imageAltTextAudit(altTexts: string[]): TechnicalAuditItem | null {
     audited++;
     const len = trimmed.length;
     const wc = trimmed.split(/\s+/).filter(Boolean).length;
-    if (len > 125) {
+    if (len >= 125) {
       issues.push({ alt: trimmed, reason: `${len} chars - shorten to under 125` });
     } else if (wc < 2) {
       issues.push({ alt: trimmed, reason: "just one word - use 2-5 descriptive keywords" });
@@ -279,7 +279,13 @@ function imageTitleAudit(titles: string[], imageCount: number): TechnicalAuditIt
   };
 }
 
-function computeHeadingStructureAudits(headings: HeadingItem[], wordCount: number): TechnicalAuditItem[] {
+function computeHeadingStructureAudits(
+  headings: HeadingItem[],
+  wordCount: number,
+  primaryKeyword?: string,
+  secondaryKeyword?: string,
+  unstyledHeadings?: string[]
+): TechnicalAuditItem[] {
   const audits: TechnicalAuditItem[] = [];
   // Count H2 AND H3 as section headings: an article sectioned only with H3s is
   // still sectioned, so it shouldn't be told it has "no section headings". Mirrors
@@ -316,26 +322,31 @@ function computeHeadingStructureAudits(headings: HeadingItem[], wordCount: numbe
     densityFired = true;
   }
 
+  // Lines that look like headings but were typed as plain text - nudge to style as H2.
+  if (unstyledHeadings && unstyledHeadings.length > 0) {
+    const n = unstyledHeadings.length;
+    const examples = unstyledHeadings.slice(0, 2).map((t) => `"${t}"`).join(", ");
+    audits.push({
+      label: "Looks Like a Heading",
+      value: `${n} line${n === 1 ? "" : "s"} read${n === 1 ? "s" : ""} like a heading but ${n === 1 ? "isn't" : "aren't"} styled`,
+      status: "warning",
+      recommendation: `${examples}${n > 2 ? ", and more," : ""} ${n === 1 ? "looks" : "look"} like a section heading typed as plain text. In Sanity, select the line and apply the "Heading 2" style so it counts as a real heading.`,
+    });
+  }
+
   if (headings.length === 0) {
     if (!densityFired) {
       audits.push({
         label: "Heading Structure",
         value: "No headings in body",
         status: "warning",
-        recommendation: "Add H2 headings to break the article into scannable sections.",
+        recommendation: "Consider adding H2-H6 subheadings to structure the article into scannable sections.",
       });
     }
     return audits;
   }
-  const h1s = headings.filter((h) => h.level === 1);
-  if (h1s.length > 0) {
-    audits.push({
-      label: "H1 in body",
-      value: `${h1s.length} H1 heading${h1s.length === 1 ? "" : "s"} in the body`,
-      status: "warning",
-      recommendation: "The article title is your H1. Body headings should start at H2 so the outline isn't ambiguous.",
-    });
-  }
+  // (No "H1 in body" warning. The article title IS the page H1, and the Heading Outline
+  // below now shows it explicitly - so a stray body H1 is displayed there, not scolded.)
   let prevLevel = 0;
   const skips: { from: number; to: number; at: string }[] = [];
   for (const h of headings) {
@@ -367,156 +378,174 @@ function computeHeadingStructureAudits(headings: HeadingItem[], wordCount: numbe
       status: "good",
     });
   }
+
+  // Keyword-in-headings nudge (separate from structural health). Reinforce relevance by
+  // working the primary and/or secondary keyword into at least one subheading. Only fires
+  // when subheadings actually exist - otherwise the "no headings" / density notes cover it.
+  const subheads = headings.filter((h) => h.level >= 2);
+  const subheadingText = subheads.map((h) => h.text).join("  ");
+  const hasPrimaryInHeads = primaryKeyword ? containsKeywordTokens(subheadingText, primaryKeyword) : false;
+  const hasSecondaryInHeads = secondaryKeyword ? containsKeywordTokens(subheadingText, secondaryKeyword) : false;
+  if (subheads.length > 0 && (primaryKeyword || secondaryKeyword) && !hasPrimaryInHeads && !hasSecondaryInHeads) {
+    const kw = [
+      primaryKeyword ? `primary keyword "${primaryKeyword}"` : "",
+      secondaryKeyword ? `secondary keyword "${secondaryKeyword}"` : "",
+    ].filter(Boolean).join(" or ");
+    audits.push({
+      label: "Keywords in Headings",
+      value: "No subheading uses your target keyword",
+      status: "warning",
+      recommendation: `Work your ${kw} into at least one H2 or H3. Keywords in headers reinforce relevance for readers and search engines.`,
+    });
+  }
+
   return audits;
 }
 
-function StatTile({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <div style={{ padding: "8px 4px", background: "rgba(0,0,0,0.025)", borderRadius: 8, textAlign: "center" }}>
-      <div style={{ fontSize: 18, fontWeight: 700, color, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: 9, fontWeight: 700, color: "#4b5563", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 4 }}>{label}</div>
-    </div>
-  );
-}
-
-function LinkIssueRow({ result }: { result: LinkCheckResult }) {
+// Small health badge for a checked URL (OK / 301 / 404 / BLOCKED ...).
+function HealthBadge({ result }: { result: LinkCheckResult }) {
   const map = {
-    ok: { bg: "rgba(22,163,74,0.06)", color: "#16a34a", label: "OK" },
-    redirect: { bg: "rgba(230,192,27,0.12)", color: "#8B7310", label: result.status > 0 ? String(result.status) : "REDIR" },
-    broken: { bg: "rgba(220,38,38,0.06)", color: "#dc2626", label: result.status > 0 ? String(result.status) : "404" },
-    unverified: { bg: "rgba(245,158,11,0.10)", color: "#b45309", label: result.status > 0 ? String(result.status) : "BLOCKED" },
-    error: { bg: "rgba(220,38,38,0.06)", color: "#dc2626", label: "ERR" },
+    ok: { color: "#16a34a", label: "OK" },
+    redirect: { color: "#8B7310", label: result.status > 0 ? String(result.status) : "REDIR" },
+    broken: { color: "#dc2626", label: result.status > 0 ? String(result.status) : "404" },
+    unverified: { color: "#b45309", label: result.status > 0 ? String(result.status) : "BLOCKED" },
+    error: { color: "#dc2626", label: "ERR" },
   } as const;
   const c = map[result.category];
-  const tooltip = result.category === "unverified"
-    ? `${result.url} (couldn't auto-check; likely anti-bot blocking - open manually to verify)`
-    : result.error ? `${result.url} (${result.error})` : result.url;
   return (
-    <a
-      href={result.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      style={{
-        display: "flex", alignItems: "center", gap: 8, padding: "6px 10px",
-        background: c.bg, borderRadius: 6, textDecoration: "none",
-      }}
-    >
-      <span style={{
-        fontSize: 9, fontWeight: 700, letterSpacing: "0.04em",
-        padding: "2px 6px", borderRadius: 99, background: "#ffffff", color: c.color,
-        fontVariantNumeric: "tabular-nums", flexShrink: 0,
-      }}>
-        {c.label}
-      </span>
-      <span
-        style={{
-          fontSize: 11, color: "#1f2937",
-          fontFamily: "ui-monospace, SFMono-Regular, monospace",
-          flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}
-        title={tooltip}
-      >
-        {result.url}
-      </span>
-    </a>
+    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.04em", padding: "2px 6px", borderRadius: 99, background: "#ffffff", color: c.color, fontVariantNumeric: "tabular-nums", flexShrink: 0, marginTop: 1 }}>
+      {c.label}
+    </span>
   );
 }
 
-function LinkCheckCard({ urls, results, isLoading, error, hasRun, onCheck }: { urls: string[]; results: LinkCheckResult[]; isLoading: boolean; error: string | null; hasRun: boolean; onCheck: () => void }) {
-  const counts = useMemo(() => {
-    const total = results.length;
-    const valid = results.filter((r) => r.category === "ok").length;
-    const redirects = results.filter((r) => r.category === "redirect").length;
-    const broken = results.filter((r) => r.category === "broken").length;
-    const errored = results.filter((r) => r.category === "error").length;
-    const unverified = results.filter((r) => r.category === "unverified").length;
-    const issues = results.filter((r) => r.category !== "ok");
-    return { total, valid, redirects, broken, errored, unverified, issues };
-  }, [results]);
+function LinkCheckCard({
+  urls,
+  linksDetailed,
+  results,
+  isLoading,
+  error,
+  hasRun,
+  onCheck,
+}: {
+  urls: string[];
+  linksDetailed?: { url: string; hyperlinked: boolean; anchorText?: string }[];
+  results: LinkCheckResult[];
+  isLoading: boolean;
+  error: string | null;
+  hasRun: boolean;
+  onCheck: () => void;
+}) {
+  const [openBucket, setOpenBucket] = useState<string | null>(null);
+  const haveTypes = !!linksDetailed;
+  const detailByUrl = useMemo(() => new Map((linksDetailed || []).map((d) => [d.url, d])), [linksDetailed]);
+  const resultByUrl = useMemo(() => new Map(results.map((r) => [r.url, r])), [results]);
+
+  // Paired tiles (see plugin): Working/Broken (health) + Linked/Not-linked (type). Interleaved
+  // so a 2-column grid stacks opposites. "Working" includes redirects.
+  const blockedUrls = results.filter((r) => r.category === "unverified").map((r) => r.url);
+  const tiles = useMemo(() => {
+    const hyper = (linksDetailed || []).filter((l) => l.hyperlinked).map((l) => l.url);
+    const plain = (linksDetailed || []).filter((l) => !l.hyperlinked).map((l) => l.url);
+    const working = results.filter((r) => r.category === "ok" || r.category === "redirect").map((r) => r.url);
+    const broken = results.filter((r) => r.category === "broken" || r.category === "error").map((r) => r.url);
+    const t: { key: string; label: string; color: string; urls: string[]; note?: string }[] = [];
+    if (hasRun) t.push({ key: "working", label: "Working", color: "#16a34a", urls: working });
+    if (haveTypes) t.push({ key: "linked", label: "Linked", color: "#16a34a", urls: hyper });
+    if (hasRun) t.push({ key: "broken", label: "Broken", color: "#dc2626", urls: broken });
+    if (haveTypes) t.push({ key: "notlinked", label: "Not linked", color: "#dc2626", urls: plain, note: "Not links yet - hyperlink these so readers can click them and search engines can follow them." });
+    return t;
+  }, [haveTypes, linksDetailed, hasRun, results]);
+
+  const open = tiles.find((t) => t.key === openBucket) || null;
+
+  const renderLinkRow = (url: string) => {
+    const d = detailByUrl.get(url);
+    const r = resultByUrl.get(url);
+    return (
+      <a key={url} href={url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "6px 8px", background: "rgba(0,0,0,0.025)", borderRadius: 6, textDecoration: "none", marginTop: 4 }}>
+        {r && <HealthBadge result={r} />}
+        <div style={{ minWidth: 0, flex: 1 }}>
+          {d?.anchorText && (
+            <div style={{ fontSize: 11, color: "#1f2937", fontWeight: 600, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>&ldquo;{d.anchorText}&rdquo;</div>
+          )}
+          <div style={{ fontSize: 10, color: "#4b5563", fontFamily: "ui-monospace, SFMono-Regular, monospace", wordBreak: "break-all", lineHeight: 1.35 }}>{url}</div>
+        </div>
+      </a>
+    );
+  };
 
   return (
     <div id="anchor-link-check" style={cardStyle}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
-        <span style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", color: "#4b5563", fontWeight: 600 }}>
-          Link Health
-        </span>
+        <span style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", color: "#4b5563", fontWeight: 600 }}>Link Health</span>
         {hasRun && !isLoading && (
           <button onClick={onCheck} style={{ background: "none", border: "none", fontSize: 10, fontWeight: 600, color: MJH_BLUE, cursor: "pointer", padding: "2px 4px" }} title="Run again">Re-check</button>
         )}
       </div>
 
-      <div style={{ fontSize: 11, color: "#1f2937", lineHeight: 1.5, marginBottom: 10 }}>
-        {urls.length === 0
-          ? "No external links found in the body."
-          : `${urls.length} link${urls.length === 1 ? "" : "s"} found in the body.`}
-      </div>
-
-      {urls.length > 0 && !hasRun && !isLoading && (
-        <button onClick={onCheck} style={{
-          width: "100%", padding: "8px 12px", fontSize: 11, fontWeight: 700,
-          color: "#1f2937", background: MJH_GOLD, border: "none", borderRadius: 6, cursor: "pointer", letterSpacing: "0.01em",
-        }}>
-          Check {urls.length} link{urls.length === 1 ? "" : "s"} for 404s
-        </button>
-      )}
-
-      {isLoading && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "16px 0" }}>
-          <LoadingBars size="xs" color={MJH_BLUE} />
-          <span style={{ fontSize: 11, color: "#4b5563" }}>Checking {urls.length} link{urls.length === 1 ? "" : "s"}...</span>
-        </div>
-      )}
-
-      {error && !isLoading && (
-        <div style={{
-          padding: "10px 12px", background: "rgba(220,38,38,0.04)",
-          border: "1px solid rgba(220,38,38,0.18)", borderRadius: 8,
-          fontSize: 11, color: "#b91c1c", lineHeight: 1.5,
-        }}>
-          {error}
-          <button onClick={onCheck} style={{
-            display: "block", marginTop: 6, padding: "4px 10px",
-            fontSize: 11, fontWeight: 700, color: "#ffffff", background: "#dc2626",
-            border: "none", borderRadius: 5, cursor: "pointer",
-          }}>Try again</button>
-        </div>
-      )}
-
-      {hasRun && !isLoading && !error && (
+      {urls.length === 0 ? (
+        <div style={{ fontSize: 11, color: "#4b5563", lineHeight: 1.5 }}>No links found in the body.</div>
+      ) : (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: counts.unverified > 0 ? "repeat(5, 1fr)" : "repeat(4, 1fr)", gap: 6 }}>
-            <StatTile label="Checked" value={counts.total} color="#475569" />
-            <StatTile label="Valid" value={counts.valid} color="#16a34a" />
-            <StatTile label="Redirects" value={counts.redirects} color="#8B7310" />
-            <StatTile label="Broken" value={counts.broken + counts.errored} color="#dc2626" />
-            {counts.unverified > 0 && (
-              <StatTile label="Blocked" value={counts.unverified} color="#b45309" />
-            )}
+          <div style={{ fontSize: 11, color: "#4b5563", lineHeight: 1.5, marginBottom: 10 }}>
+            {urls.length} link{urls.length === 1 ? "" : "s"} in the body.{tiles.length > 0 ? " Tap a box to see which." : ""}
           </div>
-          {counts.unverified > 0 && (
-            <div style={{
-              marginTop: 8, padding: "6px 10px",
-              background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)",
-              borderRadius: 6, fontSize: 10.5, color: "#92400e", lineHeight: 1.45,
-            }}>
-              {counts.unverified} link{counts.unverified === 1 ? "" : "s"} were blocked from our auto-check (likely
-              anti-bot rules on the destination site). They may still work fine for human readers - click each to confirm.
+
+          {tiles.length > 0 && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 6 }}>
+              {tiles.map((t) => {
+                const empty = t.urls.length === 0;
+                const active = openBucket === t.key && !empty;
+                return (
+                  <button
+                    key={t.key}
+                    type="button"
+                    onClick={() => !empty && setOpenBucket(active ? null : t.key)}
+                    aria-expanded={active}
+                    aria-label={`${t.urls.length} ${t.label} links`}
+                    style={{ padding: "8px 4px", background: active ? "rgba(0,93,172,0.08)" : "rgba(0,0,0,0.025)", border: active ? `1px solid ${MJH_BLUE}55` : "1px solid transparent", borderRadius: 8, textAlign: "center", cursor: empty ? "default" : "pointer", opacity: empty ? 0.5 : 1 }}
+                  >
+                    <div style={{ fontSize: 18, fontWeight: 700, color: t.color, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{t.urls.length}</div>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: "#4b5563", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: 4 }}>{t.label}</div>
+                  </button>
+                );
+              })}
             </div>
           )}
-          {counts.issues.length > 0 ? (
-            <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: "#4b5563", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                {counts.issues.length} link{counts.issues.length === 1 ? "" : "s"} need{counts.issues.length === 1 ? "s" : ""} attention
-              </div>
-              {counts.issues.map((r) => <LinkIssueRow key={r.url} result={r} />)}
+
+          {open && open.urls.length > 0 && (
+            <div style={{ marginTop: 8 }}>
+              {open.note && (
+                <div style={{ fontSize: 10.5, color: "#92400e", background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 6, padding: "6px 9px", lineHeight: 1.45, marginBottom: 2 }}>{open.note}</div>
+              )}
+              {open.urls.map(renderLinkRow)}
             </div>
-          ) : (
-            <div style={{
-              marginTop: 12, padding: "8px 10px",
-              background: "rgba(22,163,74,0.05)", border: "1px solid rgba(22,163,74,0.15)",
-              borderRadius: 8, fontSize: 11, color: "#16a34a", fontWeight: 600, textAlign: "center",
-            }}>
-              All {counts.total} link{counts.total === 1 ? "" : "s"} resolve cleanly.
+          )}
+
+          {hasRun && blockedUrls.length > 0 && (
+            <div style={{ marginTop: 8, padding: "6px 10px", background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 6, fontSize: 10.5, color: "#92400e", lineHeight: 1.45 }}>
+              {blockedUrls.length} link{blockedUrls.length === 1 ? "" : "s"} couldn&apos;t be auto-checked (the destination blocks our checker) - open them to confirm.
+            </div>
+          )}
+
+          {!hasRun && !isLoading && (
+            <button onClick={onCheck} style={{ width: "100%", marginTop: 10, padding: "8px 12px", fontSize: 11, fontWeight: 700, color: "#1f2937", background: MJH_GOLD, border: "none", borderRadius: 6, cursor: "pointer", letterSpacing: "0.01em" }}>
+              Check {urls.length} link{urls.length === 1 ? "" : "s"} for broken / redirects
+            </button>
+          )}
+
+          {isLoading && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "16px 0" }}>
+              <LoadingBars size="xs" color={MJH_BLUE} />
+              <span style={{ fontSize: 11, color: "#4b5563" }}>Checking {urls.length} link{urls.length === 1 ? "" : "s"}...</span>
+            </div>
+          )}
+
+          {error && !isLoading && (
+            <div style={{ marginTop: 10, padding: "10px 12px", background: "rgba(220,38,38,0.04)", border: "1px solid rgba(220,38,38,0.18)", borderRadius: 8, fontSize: 11, color: "#b91c1c", lineHeight: 1.5 }}>
+              {error}
+              <button onClick={onCheck} style={{ display: "block", marginTop: 6, padding: "4px 10px", fontSize: 11, fontWeight: 700, color: "#ffffff", background: "#dc2626", border: "none", borderRadius: 5, cursor: "pointer" }}>Try again</button>
             </div>
           )}
         </>
@@ -537,7 +566,7 @@ export function TechnicalTab({
   const headingsDetailed = documentFields?.headingsDetailed;
   const headingsForStructure: HeadingItem[] = headingsDetailed ?? headings.map((t) => ({ text: t, level: 2 }));
   const wordCount = text ? text.split(/\s+/).filter(Boolean).length : 0;
-  const structureAudits = useMemo(() => computeHeadingStructureAudits(headingsForStructure, wordCount), [headingsForStructure, wordCount]);
+  const structureAudits = useMemo(() => computeHeadingStructureAudits(headingsForStructure, wordCount, primaryKeyword, secondaryKeyword), [headingsForStructure, wordCount, primaryKeyword, secondaryKeyword]);
 
   const imageNames = documentFields?.imageNames || [];
   const { filenames: imageFilenames, altTexts: imageAltTexts } = useMemo(
@@ -596,29 +625,61 @@ export function TechnicalTab({
         footer={<SlugRedirectNotice />}
       />
 
+      {/* Link Health sits right under URL Slug - both are about the page's links. */}
+      <LinkCheckCard
+        urls={bodyLinks}
+        results={linkCheckResults}
+        isLoading={isLinkCheckLoading}
+        error={linkCheckError}
+        hasRun={hasRunLinkCheck}
+        onCheck={onCheckLinks}
+      />
+
       {wordAudit && <AuditCard anchorId="anchor-word-count" label={wordAudit.label} value={wordAudit.value} status={wordAudit.status} recommendation={wordAudit.recommendation} />}
 
-      {structureAudits.map((a, i) => (
-        <AuditCard key={`structure-${i}`} anchorId={i === 0 ? "anchor-headings-structure" : undefined} label={a.label} value={a.value} status={a.status} recommendation={a.recommendation} />
-      ))}
+      {(() => {
+        const structIdx = structureAudits.findIndex((a) => a.label !== "Keywords in Headings" && a.label !== "Looks Like a Heading");
+        return structureAudits.map((a, i) => (
+          <AuditCard key={`structure-${i}`} anchorId={a.label === "Keywords in Headings" ? "anchor-headings-keyword" : a.label === "Looks Like a Heading" ? "anchor-headings-unstyled" : i === structIdx ? "anchor-headings-structure" : undefined} label={a.label} value={a.value} status={a.status} recommendation={a.recommendation} />
+        ));
+      })()}
 
-      {headings.length > 0 && (
+      {(headings.length > 0 || !!documentFields?.title) && (
         <div id="anchor-headings-outline" style={{ ...cardStyle, padding: "8px 14px" }}>
           <div style={{ fontSize: 10, color: "#4b5563", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600, marginBottom: 6 }}>
             Heading Outline
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {(headingsDetailed ? headingsDetailed.slice(0, 12) : headings.slice(0, 12).map((h) => ({ text: h, level: 2 }))).map((h, i) => (
-              <div key={i} style={{
-                fontSize: 11, color: h.text ? "#4b5563" : "#dc2626",
-                fontStyle: h.text ? "normal" : "italic", lineHeight: 1.4,
-                paddingLeft: Math.max(0, (h.level - 2) * 12),
-              }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: "#4b5563", marginRight: 6 }}>H{h.level}</span>
-                {h.text || "(empty)"}
+            {/* The article title renders as the page H1 - show it first so editors can see
+                exactly what their H1 is, then the body headings the tool scanned below it. */}
+            {documentFields?.title && (
+              <div style={{ fontSize: 11, color: MJH_BLUE, fontWeight: 700, lineHeight: 1.4 }}>
+                <span style={{ fontSize: 9, fontWeight: 700, color: MJH_BLUE, marginRight: 6 }}>H1</span>
+                {documentFields.title}
+                <span style={{ fontSize: 9, color: "#6b7280", fontWeight: 500, marginLeft: 6 }}>(article title)</span>
               </div>
-            ))}
-            {headings.length > 12 && <div style={{ fontSize: 10, color: "#4b5563" }}>+ {headings.length - 12} more</div>}
+            )}
+            {(headingsDetailed ? headingsDetailed.slice(0, 12) : headings.slice(0, 12).map((h) => ({ text: h, level: 2 }))).map((h, i) => {
+              const isH1 = h.level === 1;
+              return (
+                <div key={i} style={{
+                  fontSize: 11,
+                  color: !h.text ? "#dc2626" : isH1 ? MJH_BLUE : "#4b5563",
+                  fontWeight: isH1 ? 700 : 400,
+                  fontStyle: h.text ? "normal" : "italic", lineHeight: 1.4,
+                  paddingLeft: Math.max(0, (h.level - 2) * 12),
+                }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: isH1 ? MJH_BLUE : "#4b5563", marginRight: 6 }}>H{h.level}</span>
+                  {h.text || "(empty)"}
+                </div>
+              );
+            })}
+            {(headingsDetailed ?? headings).length > 12 && <div style={{ fontSize: 10, color: "#4b5563" }}>+ {(headingsDetailed ?? headings).length - 12} more</div>}
+          </div>
+          <div style={{ fontSize: 10, color: "#6b7280", marginTop: 8, lineHeight: 1.4 }}>
+            {headings.length > 0
+              ? "The title above is your H1; the tool scans the H2-H6 tags below it. Tip: work your primary and/or secondary keyword into a header where it reads naturally."
+              : "The title above is your H1, and there are no H2-H6 subheadings yet. Tip: work your primary and/or secondary keyword into the title where it reads naturally."}
           </div>
         </div>
       )}
@@ -635,15 +696,6 @@ export function TechnicalTab({
       {imgTitleAudit && (
         <AuditCard anchorId="anchor-image-titles" label={imgTitleAudit.label} value={imgTitleAudit.value} status={imgTitleAudit.status} recommendation={imgTitleAudit.recommendation} />
       )}
-
-      <LinkCheckCard
-        urls={bodyLinks}
-        results={linkCheckResults}
-        isLoading={isLinkCheckLoading}
-        error={linkCheckError}
-        hasRun={hasRunLinkCheck}
-        onCheck={onCheckLinks}
-      />
     </div>
   );
 }

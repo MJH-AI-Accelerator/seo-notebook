@@ -276,19 +276,9 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
       jumpTo: { tab: "technical", anchorId: "anchor-headings-structure" },
     });
   }
+  // (H1-in-body is intentionally no longer flagged: the article title IS the H1, and the
+  // Heading Outline on the Other Recs tab now shows it explicitly instead of warning.)
   if (headingsDetailed) {
-    const bodyH1 = headingsDetailed.filter((h) => h.level === 1).length;
-    if (bodyH1 > 0) {
-      items.push({
-        id: "headings-h1-in-body",
-        category: "headings",
-        severity: "warning",
-        label: "H1 inside the body",
-        description: `${bodyH1} H1 heading${bodyH1 === 1 ? "" : "s"} in the body of the article.`,
-        howToFix: "The article title is your H1. Body headings should start at H2 so the outline isn't ambiguous.",
-        jumpTo: { tab: "technical", anchorId: "anchor-headings-structure" },
-      });
-    }
     let prevLevel = 0;
     let skips = 0;
     for (const h of headingsDetailed) {
@@ -317,6 +307,26 @@ export function buildSummaryItems(input: BuildSummaryInput): SummaryItem[] {
         howToFix: "Either remove the empty heading blocks or fill them with text.",
         jumpTo: { tab: "technical", anchorId: "anchor-headings-structure" },
       });
+    }
+    // Keyword-in-headings opportunity - mirrors the "Keywords in Headings" audit on the
+    // Other Recs tab so the nudge also surfaces in the Summary hub. Only when subheadings
+    // exist and neither target keyword appears in any of them.
+    const subheads = headingsDetailed.filter((h) => h.level >= 2);
+    if (subheads.length > 0 && (primaryKeyword || secondaryKeyword)) {
+      const subText = subheads.map((h) => h.text).join("  ");
+      const hasP = primaryKeyword ? containsKeywordTokens(subText, primaryKeyword) : false;
+      const hasS = secondaryKeyword ? containsKeywordTokens(subText, secondaryKeyword) : false;
+      if (!hasP && !hasS) {
+        items.push({
+          id: "headings-keyword-missing",
+          category: "headings",
+          severity: "opportunity",
+          label: "Keyword missing from subheadings",
+          description: "No H2/H3 subheading uses your primary or secondary keyword.",
+          howToFix: "Work your primary or secondary keyword into at least one subheading - keywords in headers reinforce relevance for readers and search.",
+          jumpTo: { tab: "technical", anchorId: "anchor-headings-keyword" },
+        });
+      }
     }
   }
 
