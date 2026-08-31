@@ -5,11 +5,10 @@
  * (see PR #33); without it the backend returns 401.
  *
  * There is deliberately no override. This app runs in the browser and Next
- * inlines NEXT_PUBLIC_* values into the public bundle, so an earlier
- * NEXT_PUBLIC_SEO_COPILOT_API_KEY branch would have published the genuine
- * server credential to anyone who fetched the chunk the moment someone
- * "provisioned it properly". The only key a browser client can hold is one that
- * is already public.
+ * inlines NEXT_PUBLIC_* values into the public bundle, so the public env
+ * override this used to read would have published the genuine server credential
+ * to anyone who fetched the chunk the moment someone "provisioned it properly".
+ * The only key a browser client can hold is one that is already public.
  *
  * Must stay in lockstep with SHARED_CLIENT_KEY in the backend's
  * src/lib/seo-copilot/sharedKey.ts. apiKey.test.ts pins this exact literal.
